@@ -248,7 +248,7 @@ const rules = {
           '.write': hostReset,
           $id: {
             '.write': `auth != null && auth.uid == ${HOST} && !data.exists() && newData.exists() && (${LOBBY} || ${LIVE})`,
-            '.validate': `$id.matches(/^[a-z0-9]{6,12}$/) && newData.hasChildren(['lat', 'lng', 'h', 's'])`,
+            '.validate': `$id.length >= 6 && $id.length <= 12 && newData.hasChildren(['lat', 'lng', 'h', 's'])`,
             lat: num(-90, 90),
             lng: num(-180, 180),
             h: { '.validate': `newData.val() == 'lookout' || newData.val() == 'shield' || newData.val() == 'cloak'` },
@@ -291,7 +291,7 @@ const rules = {
                 && newData.child('t').val() == now
                 && ${CONSUME("newData.child('drop').val()", '$kind', 'newData.parent().parent().parent()')}
                 && ($kind != 'tracker' || ${HIDER("newData.child('target').val()")})`),
-              '.validate': `$kind.matches(/^(lookout|shield|cloak|tracker)$/) && newData.hasChildren(['t', 'drop'])`,
+              '.validate': `($kind == 'lookout' || $kind == 'shield' || $kind == 'cloak' || $kind == 'tracker') && newData.hasChildren(['t', 'drop'])`,
               t: { '.validate': 'newData.isNumber()' },
               drop: { '.validate': 'newData.isString()' },
               target: { '.validate': 'newData.isString()' },
@@ -322,6 +322,17 @@ const rules = {
     },
   },
 };
+
+// Firebase silently refuses rules whose regexes use groups or alternation (the deploy
+// "succeeds" but the old rules stay live), so refuse to build them.
+JSON.stringify(rules, (k, v) => {
+  if (typeof v === 'string') {
+    for (const m of v.matchAll(/\.matches\(\/(.*?)\/\)/g)) {
+      if (/[|()]/.test(m[1])) throw new Error(`Unsupported regex in rule "${k}": /${m[1]}/ (no groups or |)`);
+    }
+  }
+  return v;
+});
 
 const out = new URL('../firebase/database.rules.json', import.meta.url);
 writeFileSync(out, JSON.stringify(rules, null, 2) + '\n');
