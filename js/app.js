@@ -1,5 +1,6 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvtyf573';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyf573';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvtyseux';
+import { GameMap, loadEngine } from './map.js?v=mvtyseux';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyseux';
 
 /* ------------------------------------------------------------------ constants */
 
@@ -49,7 +50,7 @@ const S = {
   subs: [], fix: null, gpsErr: null, stopGps: null,
   lastSent: 0, lastPoll: 0, answering: null, answerFail: 0,
   seenCaught: null, seenReveal: null, lastPhase: null, hiddenAt: null,
-  maps: {}, tick: null, renderQueued: false, satellite: false, endSent: false,
+  maps: {}, tick: null, renderQueued: false, satellite: false, threeD: false, follow: false, engine: 'leaflet', endSent: false,
 };
 const wake = new WakeLock(() => scheduleRender());
 
@@ -86,7 +87,9 @@ async function boot() {
     return;
   }
   try {
-    S.db = await connect();
+    const [db, engine] = await Promise.all([connect(), loadEngine()]);
+    S.db = db;
+    S.engine = engine;
     S.uid = S.db.uid;
   } catch (e) {
     console.error(e);
@@ -115,7 +118,7 @@ function show(screen) {
     S.screen = screen;
     window.scrollTo(0, 0);
     if (screen === 'game') wake.enable(); else wake.disable();
-    setTimeout(() => Object.values(S.maps).forEach((m) => m.invalidateSize()), 50);
+    setTimeout(() => Object.values(S.maps).forEach((m) => m.resize()), 50);
   }
 }
 
@@ -464,6 +467,7 @@ async function onClick(e) {
     case 'end-now': return confirmSheet('End the game now?', 'Everyone goes to the results screen.', 'End game', () => S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS }));
     case 'recentre': return recentre();
     case 'layers': return toggleLayers();
+    case 'three-d': return toggle3D();
     case 'again': return backToLobby();
     case 'close-sheet': return closeSheet();
     case 'wake': return wake.enable();
@@ -552,95 +556,73 @@ function showHold(html, ms) {
 
 /* ------------------------------------------------------------------ maps */
 
-function makeMap(el) {
-  const map = L.map(el, { zoomControl: false, attributionControl: true, tap: true });
-  const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  map._street = L.tileLayer(dark
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd', maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO',
-  }).addTo(map);
-  map._sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
-  map._pins = {};
-  map._circles = {};
-  map._fitted = false;
-  return map;
-}
+const AREA_STYLE = { color: '#FF5B14', weight: 3, dashed: true, fill: 0.04 };
+const ACC_STYLE = { color: '#2D5BFF', weight: 1, lineOpacity: 0.45, fill: 0.1 };
+const REVEAL_STYLE = { color: '#FF5B14', weight: 2, fill: 0.16 };
+
 function getMap(key, elId) {
   if (!S.maps[key]) {
-    S.maps[key] = makeMap($(elId));
-    fitOnce(S.maps[key]);
-    if (key === 'lobby') {
-      S.maps[key].on('click', (e) => {
-        if (isHost()) setArea(e.latlng.lat, e.latlng.lng, (area() && area().r) || 400);
-      });
-    }
+    const m = new GameMap($(elId), {
+      engine: S.engine,
+      onClick: (lat, lng) => { if (key === 'lobby' && isHost()) setArea(lat, lng, (area() && area().r) || 400); },
+      onUserMove: () => { if (key === 'game') { S.follow = false; updateTools(); } },
+    });
+    m._fitted = false;
+    S.maps[key] = m;
+    fitOnce(m);
+    updateTools();
   }
   return S.maps[key];
 }
-function pin(map, key, ll, cls, label, color) {
-  const html = `<div class="pin ${cls}"><i style="background:${esc(color)}"></i>${esc(label)}</div>`;
-  let m = map._pins[key];
-  if (!m) {
-    m = L.marker(ll, { icon: L.divIcon({ className: 'pin-wrap', html, iconSize: [0, 0] }), keyboard: false, zIndexOffset: cls.includes('me') ? 1000 : 0 }).addTo(map);
-    m._html = html;
-    map._pins[key] = m;
-  } else {
-    m.setLatLng(ll);
-    if (m._html !== html) { m.setIcon(L.divIcon({ className: 'pin-wrap', html, iconSize: [0, 0] })); m._html = html; }
-  }
-  m._seen = true;
-}
-function circle(map, key, ll, r, style, label) {
-  let c = map._circles[key];
-  if (!c) {
-    c = { shape: L.circle(ll, Object.assign({ radius: r, interactive: false }, style)).addTo(map) };
-    if (label) c.label = L.marker(ll, { icon: L.divIcon({ className: 'pin-wrap', html: '', iconSize: [0, 0] }), interactive: false }).addTo(map);
-    map._circles[key] = c;
-  }
-  c.shape.setLatLng(ll); c.shape.setRadius(r); c.shape.setStyle(style);
-  if (c.label) {
-    c.label.setLatLng(ll);
-    const html = `<div class="circle-label">${esc(label)}</div>`;
-    if (c.label._html !== html) { c.label.setIcon(L.divIcon({ className: 'pin-wrap', html, iconSize: [0, 0] })); c.label._html = html; }
-  }
-  c._seen = true;
-}
-function sweep(map) {
-  for (const [k, m] of Object.entries(map._pins)) { if (!m._seen) { m.remove(); delete map._pins[k]; } else m._seen = false; }
-  for (const [k, c] of Object.entries(map._circles)) {
-    if (!c._seen) { c.shape.remove(); if (c.label) c.label.remove(); delete map._circles[k]; } else c._seen = false;
-  }
-}
-function drawArea(map) {
-  const a = area();
-  if (a) circle(map, 'area', [a.lat, a.lng], a.r, { color: '#FF5B14', weight: 3, dashArray: '10 8', fill: false });
+function pinHTML(cls, label, color, who) {
+  return `<div class="pin ${cls}"><span class="pin-dot" style="background:${esc(color)}">${initial(who || label)}</span>${label ? `<span class="pin-label">${esc(label)}</span>` : ''}</div>`;
 }
 function fitOnce(map) {
   if (map._fitted) return;
   const a = area();
-  if (a) { map.fitBounds(L.latLng(a.lat, a.lng).toBounds(a.r * 2.2)); map._fitted = true; }
-  else if (S.fix) { map.setView([S.fix.lat, S.fix.lng], 16); map._fitted = true; }
-  else map.setView([51.5, -0.12], 5);
+  if (a) { map.fitCircle(a.lat, a.lng, a.r); map._fitted = true; }
+  else if (S.fix) { map.setView(S.fix.lat, S.fix.lng, 16); map._fitted = true; }
+}
+function drawArea(map) {
+  const a = area();
+  if (a) map.circle('area', a.lat, a.lng, a.r, AREA_STYLE);
 }
 function drawMe(map) {
   if (!S.fix) return;
-  const ll = [S.fix.lat, S.fix.lng];
-  circle(map, 'me-acc', ll, S.fix.acc, { color: '#2D5BFF', weight: 1, opacity: 0.5, fillOpacity: 0.08 });
+  map.circle('me-acc', S.fix.lat, S.fix.lng, S.fix.acc, ACC_STYLE);
   const role = phase() === 'lobby' ? (S.players[S.uid] || {}).role : myRole();
-  pin(map, 'me', ll, `${role || 'hider'} me`, 'You', (S.players[S.uid] || {}).color || '#888');
+  map.pin('me', S.fix.lat, S.fix.lng, `<div class="pin me ${role || 'hider'}"><span class="me-dot"></span></div>`, 1000);
+}
+function distLabel(l) {
+  if (!S.fix || !l) return '';
+  const d = distM(S.fix, l);
+  return d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`;
 }
 function recentre() {
   const m = S.maps.game;
-  if (m && S.fix) m.setView([S.fix.lat, S.fix.lng], Math.max(m.getZoom(), 17));
-  else toast('Waiting for GPS…', 'warn');
+  if (!m || !S.fix) { toast('Waiting for GPS…', 'warn'); return; }
+  S.follow = true;
+  m.resetNorth();
+  m.setView(S.fix.lat, S.fix.lng, Math.max(m.zoom(), 17.5), true);
+  updateTools();
 }
 function toggleLayers() {
-  S.satellite = !S.satellite;
-  for (const m of Object.values(S.maps)) {
-    if (S.satellite) { m.removeLayer(m._street); m._sat.addTo(m); } else { m.removeLayer(m._sat); m._street.addTo(m); }
-  }
+  const m = S.maps.game;
+  if (m) S.satellite = m.toggleSatellite();
+  updateTools();
+}
+function toggle3D() {
+  const m = S.maps.game;
+  if (m) S.threeD = m.toggle3D();
+  updateTools();
+}
+function updateTools() {
+  const m = S.maps.game;
   $('#layer-btn').textContent = S.satellite ? 'Map' : 'Sat';
+  $('#layer-btn').setAttribute('aria-label', S.satellite ? 'Show street map' : 'Show satellite view');
+  $('#threed-btn').hidden = !(m && m.supports3D);
+  $('#threed-btn').setAttribute('aria-pressed', String(!!S.threeD));
+  $('#follow-btn').setAttribute('aria-pressed', String(!!S.follow));
 }
 
 /* ------------------------------------------------------------------ rendering */
@@ -704,18 +686,18 @@ function renderLobby() {
   $('#start').textContent = !a ? 'Set the play area to start' : !seekers ? 'Pick a seeker to start' : !hiders ? 'Someone has to hide' : 'Start game';
 
   const map = getMap('lobby', '#lobby-map');
+  map.begin();
   drawArea(map);
   for (const u of ids) {
     if (u === S.uid) continue;
     const l = S.locs[u];
-    if (l) pin(map, u, [l.lat, l.lng], S.players[u].role, S.players[u].name, S.players[u].color);
+    if (l) map.pin(u, l.lat, l.lng, pinHTML(S.players[u].role, S.players[u].name, S.players[u].color));
   }
   drawMe(map);
-  sweep(map);
+  map.end();
   fitOnce(map);
-  if (a && !map._areaKey) map._areaKey = '';
   const ak = a ? `${a.lat},${a.lng},${a.r}` : '';
-  if (a && map._areaKey !== ak) { map._areaKey = ak; map.fitBounds(L.latLng(a.lat, a.lng).toBounds(a.r * 2.2)); }
+  if (a && map._areaKey !== ak) { map._areaKey = ak; map.fitCircle(a.lat, a.lng, a.r); }
 }
 
 function seg(action, k, opts, cur, fmt, enabled) {
@@ -761,7 +743,13 @@ function renderGame(ph) {
   if (banner) { bEl.textContent = banner; bEl.className = 'banner' + (danger ? ' danger' : ''); bEl.dataset.action = wake.active ? '' : 'wake'; }
 
   // dock
-  setHTML($('#dock-status'), `<span><b>${role === 'seeker' ? 'You\'re a seeker' : 'You\'re hiding'}</b></span><span class="muted">${esc(gpsLine())}</span>`);
+  let edge = '';
+  const a = area();
+  if (a && S.fix) {
+    const d = Math.round(a.r - distM(S.fix, a, a.mlon));
+    edge = d >= 0 ? ` · ${d} m to edge` : ` · ${-d} m outside`;
+  }
+  setHTML($('#dock-status'), `<span><b>${role === 'seeker' ? 'You\'re a seeker' : 'You\'re hiding'}</b><span class="muted">${esc(edge)}</span></span><span class="muted">${esc(gpsLine())}</span>`);
   let actions = '';
   if (ph === 'hunt' && role === 'seeker') {
     const next = nextRevealAt();
@@ -778,16 +766,18 @@ function renderGame(ph) {
 
   // map
   const map = getMap('game', '#game-map');
+  map.begin();
   drawArea(map);
   for (const [u, l] of Object.entries(S.locs)) {
     if (!l || !S.players[u]) continue;
     const stale = now - l.t > 30000;
-    pin(map, u, [l.lat, l.lng], `${roleOf(u)}${stale ? ' stale' : ''}`, name(u) + (stale ? ` · ${Math.round((now - l.t) / 1000)}s ago` : ''), S.players[u].color);
+    const label = name(u) + (stale ? ` · ${Math.round((now - l.t) / 1000)} s ago` : (distLabel(l) ? ` · ${distLabel(l)}` : ''));
+    map.pin(u, l.lat, l.lng, pinHTML(`${roleOf(u)}${stale ? ' stale' : ''}`, label, S.players[u].color, name(u)));
   }
   if (role === 'seeker') {
     for (const [u, l] of Object.entries(S.exposed)) {
       if (!S.players[u] || S.caught[u]) continue;
-      pin(map, 'x-' + u, [l.lat, l.lng], 'exposed', `${name(u)}: ${exposedReason(l, u)}`, S.players[u].color);
+      map.pin('x-' + u, l.lat, l.lng, pinHTML('exposed', `${name(u)} · ${distLabel(l)} · ${exposedReason(l, u)}`, S.players[u].color, name(u)), 500);
     }
   }
   if (S.reveal && ph === 'hunt') {
@@ -795,13 +785,14 @@ function renderGame(ph) {
       if (c.n !== S.reveal.n || S.caught[u]) continue;
       if (role === 'hider' && u !== S.uid) continue;
       const age = Math.round((now - c.t) / 60000);
-      circle(map, 'rv-' + u, [c.lat, c.lng], c.r, { color: '#FF5B14', weight: 2, fillColor: '#FF5B14', fillOpacity: 0.13 },
-        role === 'hider' ? 'Seekers see this' : `${name(u)}${age >= 1 ? `, ${age} min ago` : ''}`);
+      const label = role === 'hider' ? 'Seekers see this' : `${name(u)}${age >= 1 ? `, ${age} min ago` : ''}`;
+      map.circle('rv-' + u, c.lat, c.lng, c.r, REVEAL_STYLE, `<div class="circle-label">${esc(label)}</div>`);
     }
   }
   drawMe(map);
-  sweep(map);
+  map.end();
   fitOnce(map);
+  if (S.follow && S.fix && S.fix.at !== S.followedAt) { S.followedAt = S.fix.at; map.setView(S.fix.lat, S.fix.lng, null, true); }
 }
 
 function renderEnd() {
@@ -824,12 +815,13 @@ function renderEnd() {
   setHTML($('#end-log'), rows.join(''));
 
   const map = getMap('end', '#end-map');
+  map.begin();
   drawArea(map);
   for (const [u, l] of Object.entries(S.locs)) {
-    if (l && S.players[u]) pin(map, u, [l.lat, l.lng], roleOf(u), name(u), S.players[u].color);
+    if (l && S.players[u]) map.pin(u, l.lat, l.lng, pinHTML(roleOf(u), name(u), S.players[u].color));
   }
   drawMe(map);
-  sweep(map);
+  map.end();
   fitOnce(map);
 }
 

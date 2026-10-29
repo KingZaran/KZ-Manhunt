@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="css/app.css?v=mvtyf573">
+  <link rel="stylesheet" href="css/app.css?v=mvtyseux">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -126,8 +126,11 @@
     <div class="map-wrap">
       <div id="game-map" class="game-map"></div>
       <div class="map-tools">
-        <button class="tool" data-action="recentre" aria-label="Centre on me">◎</button>
-        <button class="tool" data-action="layers" id="layer-btn" aria-label="Switch map style">Sat</button>
+        <button class="tool" data-action="recentre" id="follow-btn" aria-label="Follow me" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tool" data-action="three-d" id="threed-btn" aria-label="Tilt to 3D" aria-pressed="false" hidden>3D</button>
+        <button class="tool" data-action="layers" id="layer-btn" aria-label="Show satellite view">Sat</button>
       </div>
     </div>
     <footer class="dock">
@@ -157,6 +160,6 @@
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="js/app.js?v=mvtyf573"></script>
+  <script type="module" src="js/app.js?v=mvtyseux"></script>
 </body>
 </html>

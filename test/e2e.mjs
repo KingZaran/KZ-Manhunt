@@ -38,7 +38,7 @@ async function phone(label, pos) {
     route.fulfill({ contentType: 'text/javascript', body: readFileSync(HERE + 'firebase-shim/' + file, 'utf8') });
   });
   await ctx.route(/\/js\/config\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: `export const firebaseConfig = { apiKey: 'test', databaseURL: '${BASE}' };` }));
-  await ctx.route(/fonts\.(googleapis|gstatic)\.com|basemaps\.cartocdn\.com|arcgisonline\.com/, (route) => route.abort());
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com|cdn\.jsdelivr\.net|openfreemap\.org|openstreetmap\.org|arcgisonline\.com/, (route) => route.abort());
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
