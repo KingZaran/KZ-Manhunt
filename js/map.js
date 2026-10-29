@@ -99,6 +99,12 @@ export class GameMap {
       fadeDuration: 0,
     });
     this.map.touchZoomRotate.enableRotation();
+    // Follow the phone's light/dark setting.
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onTheme = () => { if (!this.satellite) { this.ready = false; this.map.setStyle(dark() ? OFM + 'styles/dark' : OFM + 'styles/liberty'); } };
+      if (mq.addEventListener) mq.addEventListener('change', onTheme); else if (mq.addListener) mq.addListener(onTheme);
+    }
     // Start with the attribution collapsed to its (i) button so it doesn't cover a small map.
     this.map.once('load', () => {
       const a = this.el.querySelector('.maplibregl-ctrl-attrib');
@@ -127,16 +133,19 @@ export class GameMap {
           'fill-extrusion-color': this.satellite ? '#e8e8e8' : (dark() ? '#3a4a44' : '#d9d4cc'),
           'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
           'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-          'fill-extrusion-opacity': this.satellite ? 0.55 : 0.85,
+          'fill-extrusion-opacity': this.satellite ? 0.3 : 0.85,
         },
       }, 'mh-fill');
     }
     if (m.getLayer('mh-3d')) m.setLayoutProperty('mh-3d', 'visibility', this.threeD ? 'visible' : 'none');
     const pitch = this.threeD ? 60 : 0;
-    if (Math.round(m.getPitch()) !== pitch) {
+    if (Math.round(m.getPitch()) === pitch) return;
+    const go = () => {
       if (animate) m.easeTo({ pitch, bearing: this.threeD ? m.getBearing() : 0, duration: 600 });
       else m.jumpTo({ pitch });
-    }
+    };
+    // Don't cut short a zoom/pan that's already animating (e.g. "follow me").
+    if (animate && m.isMoving()) m.once('moveend', go); else go();
   }
 
   /* ---------- Leaflet ---------- */

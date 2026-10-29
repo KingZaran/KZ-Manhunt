@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="css/app.css?v=mvtyz2c4">
+  <link rel="stylesheet" href="css/app.css?v=mvtz1vlm">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -95,8 +95,9 @@
       </div>
       <div id="lobby-map" class="lobby-map"></div>
       <p id="area-hint" class="muted small"></p>
-      <div class="row host-only">
-        <button class="btn btn-quiet" data-action="area-here">Centre on me</button>
+      <div class="row">
+        <button class="btn btn-quiet host-only" data-action="area-here">Centre on me</button>
+        <button class="btn btn-quiet" data-action="lobby-sat" id="lobby-sat">Satellite</button>
       </div>
       <div id="area-radius" class="host-only"></div>
     </section>
@@ -160,6 +161,6 @@
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="js/app.js?v=mvtyz2c4"></script>
+  <script type="module" src="js/app.js?v=mvtz1vlm"></script>
 </body>
 </html>

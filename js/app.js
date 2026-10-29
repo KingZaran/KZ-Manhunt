@@ -1,6 +1,6 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvtyz2c4';
-import { GameMap, loadEngine } from './map.js?v=mvtyz2c4';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyz2c4';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvtz1vlm';
+import { GameMap, loadEngine } from './map.js?v=mvtz1vlm';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtz1vlm';
 
 /* ------------------------------------------------------------------ constants */
 
@@ -468,6 +468,7 @@ async function onClick(e) {
     case 'recentre': return recentre();
     case 'layers': return toggleLayers();
     case 'three-d': return toggle3D();
+    case 'lobby-sat': return toggleLobbySatellite();
     case 'again': return backToLobby();
     case 'close-sheet': return closeSheet();
     case 'wake': return wake.enable();
@@ -610,6 +611,12 @@ function toggleLayers() {
   const m = S.maps.game;
   if (m) S.satellite = m.toggleSatellite();
   updateTools();
+}
+function toggleLobbySatellite() {
+  const m = S.maps.lobby;
+  if (!m) return;
+  const on = m.toggleSatellite();
+  $('#lobby-sat').textContent = on ? 'Street map' : 'Satellite';
 }
 function toggle3D() {
   const m = S.maps.game;
@@ -812,6 +819,8 @@ function renderEnd() {
     rows.push(`<li><time>${fmtClock(c.t - t0)}</time><span>${who}</span></li>`);
   });
   if (S.reveal) rows.push(`<li><time>&nbsp;</time><span>Seekers used ${S.reveal.n} reveal${S.reveal.n === 1 ? '' : 's'}</span></li>`);
+  if (hidersWin && S.meta.endedAt && S.meta.endedAt < huntEnd() - 2000) rows.push(`<li><time>${fmtClock(S.meta.endedAt - t0)}</time><span>The organiser ended the game early</span></li>`);
+  else rows.push(`<li><time>${fmtClock((S.meta.endedAt || huntEnd()) - t0)}</time><span>${hidersWin ? 'Time ran out' : 'Last hider caught'}</span></li>`);
   setHTML($('#end-log'), rows.join(''));
 
   const map = getMap('end', '#end-map');
