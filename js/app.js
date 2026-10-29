@@ -1,6 +1,6 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvtyseux';
-import { GameMap, loadEngine } from './map.js?v=mvtyseux';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyseux';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvtyz2c4';
+import { GameMap, loadEngine } from './map.js?v=mvtyz2c4';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyz2c4';
 
 /* ------------------------------------------------------------------ constants */
 

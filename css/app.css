@@ -158,7 +158,7 @@ body.is-host .guest-only { display: none !important; }
 .banner { padding: 10px 16px; font-weight: 600; z-index: 499; background: var(--signal); color: #1A1400; }
 .banner.danger { background: var(--danger); color: #fff; }
 .map-wrap { flex: 1; min-height: 0; position: relative; }
-.game-map { position: absolute; inset: 0; background: var(--line); }
+.map-wrap > .game-map { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: var(--line); }
 /* Leaflet controls use z-index up to 1000; keep them inside the map. */
 .game-map, .lobby-map, .end-map { z-index: 0; }
 .lobby-map, .end-map { position: relative; }

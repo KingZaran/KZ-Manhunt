@@ -99,6 +99,11 @@ export class GameMap {
       fadeDuration: 0,
     });
     this.map.touchZoomRotate.enableRotation();
+    // Start with the attribution collapsed to its (i) button so it doesn't cover a small map.
+    this.map.once('load', () => {
+      const a = this.el.querySelector('.maplibregl-ctrl-attrib');
+      if (a) a.classList.remove('maplibregl-compact-show');
+    });
     this.map.on('style.load', () => { this.ready = true; this.addOverlay(); this.apply3D(false); this.flushCircles(); });
     this.map.on('click', (e) => this.onClick(e.lngLat.lat, e.lngLat.lng));
     this.map.on('dragstart', (e) => { if (e.originalEvent) this.onUserMove(); });
