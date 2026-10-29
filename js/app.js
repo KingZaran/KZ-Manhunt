@@ -1,6 +1,6 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvu1ybvp';
-import { GameMap, loadEngine, MAP_STYLES } from './map.js?v=mvu1ybvp';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate, GpsFilter, nudgeLocation } from './geo.js?v=mvu1ybvp';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvu25efv';
+import { GameMap, loadEngine, MAP_STYLES } from './map.js?v=mvu25efv';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate, GpsFilter, nudgeLocation } from './geo.js?v=mvu25efv';
 
 /* ------------------------------------------------------------------ constants */
 
@@ -692,10 +692,10 @@ async function usePower(id, target) {
 function onFxChange() {
   // Tell players about their own effects switching on.
   const mine = S.fx[S.uid] || {};
-  const sig = Object.entries(mine).map(([k, f]) => k + f.t).join();
+  const sig = Object.entries(mine).map(([k, f]) => k + ':' + f.drop).join();
   if (S.seenFx !== null && sig !== S.seenFx) {
     for (const [k, f] of Object.entries(mine)) {
-      if (!S.seenFx.includes(k + f.t) && S.db.now() - f.t < 10000) {
+      if (!S.seenFx.includes(k + ':' + f.drop) && S.db.now() - f.t < 10000) {
         const P = POWERS[k];
         toast(k === 'tracker' ? `${P.icon} Tracking ${name(f.target)} for 15 s` : `${P.icon} ${P.name} on`, P.team);
       }
@@ -705,14 +705,14 @@ function onFxChange() {
 }
 
 function onFreezeChange() {
-  const t = S.freeze ? S.freeze.t : 0;
-  if (S.seenFreeze === null) { S.seenFreeze = t; return; }
-  if (t > S.seenFreeze && phase() === 'hunt') {
+  const key = S.freeze ? S.freeze.drop : '';
+  if (S.seenFreeze === null) { S.seenFreeze = key; return; }
+  if (key && key !== S.seenFreeze && phase() === 'hunt') {
     if (myRole() === 'hider' && frozenAt(S.fix)) { vibrate([600, 200, 600]); }
     else if (myRole() === 'hider') toast(`${name(S.freeze.by)} used Freeze, but you were out of range.`, 'hider');
     else { toast(`${name(S.freeze.by)} used Freeze: hiders within ${FREEZE_M} m are frozen and visible for 20 s.`, 'seeker', 5000); S.lastPoll = 0; }
   }
-  S.seenFreeze = t;
+  S.seenFreeze = key;
 }
 
 function powersHTML() {
