@@ -11,7 +11,6 @@ const ESRI_ATTR = 'Imagery © Esri, Maxar, Earthstar Geographics';
 const OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTR = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 
-const dark = () => !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
 function hasWebGL2() {
   try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; }
@@ -58,6 +57,17 @@ function ring(lat, lng, r, n = 72) {
   return out;
 }
 
+// Map styles players can pick: 'light' (default), 'dark', 'satellite'.
+export const MAP_STYLES = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'satellite', label: 'Satellite' },
+];
+function glStyle(mode) {
+  if (mode === 'satellite') return satelliteStyle();
+  return OFM + (mode === 'dark' ? 'styles/fiord' : 'styles/liberty');
+}
+
 function satelliteStyle() {
   return {
     version: 8,
@@ -79,7 +89,7 @@ export class GameMap {
     this.pins = new Map();
     this.circles = new Map();
     this.seen = new Set();
-    this.satellite = false;
+    this.mode = opts.style || 'light';
     this.threeD = false;
     this.ready = false;
     if (this.engine === 'gl') this.initGL(); else this.initLeaflet();
@@ -90,7 +100,7 @@ export class GameMap {
     const ml = window.maplibregl;
     this.map = new ml.Map({
       container: this.el,
-      style: dark() ? OFM + 'styles/dark' : OFM + 'styles/liberty',
+      style: glStyle(this.mode),
       center: [-1.5, 52.5], zoom: 5,
       attributionControl: { compact: true },
       maxPitch: 70,
@@ -99,12 +109,6 @@ export class GameMap {
       fadeDuration: 0,
     });
     this.map.touchZoomRotate.enableRotation();
-    // Follow the phone's light/dark setting.
-    if (window.matchMedia) {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const onTheme = () => { if (!this.satellite) { this.ready = false; this.map.setStyle(dark() ? OFM + 'styles/dark' : OFM + 'styles/liberty'); } };
-      if (mq.addEventListener) mq.addEventListener('change', onTheme); else if (mq.addListener) mq.addListener(onTheme);
-    }
     // Start with the attribution collapsed to its (i) button so it doesn't cover a small map.
     // MapLibre re-expands it whenever the style changes, unless the player opened it themselves.
     let userOpened = false;
@@ -133,10 +137,10 @@ export class GameMap {
       m.addLayer({
         id: 'mh-3d', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building', minzoom: 14,
         paint: {
-          'fill-extrusion-color': this.satellite ? '#e8e8e8' : (dark() ? '#3a4a44' : '#d9d4cc'),
+          'fill-extrusion-color': this.mode === 'satellite' ? '#e8e8e8' : (this.mode === 'dark' ? '#3a4a54' : '#d9d4cc'),
           'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
           'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-          'fill-extrusion-opacity': this.satellite ? 0.3 : 0.85,
+          'fill-extrusion-opacity': this.mode === 'satellite' ? 0.3 : 0.85,
         },
       }, 'mh-fill');
     }
@@ -154,8 +158,10 @@ export class GameMap {
   /* ---------- Leaflet ---------- */
   initLeaflet() {
     const m = L.map(this.el, { zoomControl: false, attributionControl: true });
-    this.street = L.tileLayer(OSM, { maxZoom: 19, attribution: OSM_ATTR }).addTo(m);
+    this.street = L.tileLayer(OSM, { maxZoom: 19, attribution: OSM_ATTR });
     this.sat = L.tileLayer(ESRI, { maxZoom: 19, attribution: ESRI_ATTR });
+    (this.mode === 'satellite' ? this.sat : this.street).addTo(m);
+    this.el.classList.toggle('map-dark', this.mode === 'dark');
     m.setView([52.5, -1.5], 5);
     m.on('click', (e) => this.onClick(e.latlng.lat, e.latlng.lng));
     m.on('dragstart', () => this.onUserMove());
@@ -257,14 +263,17 @@ export class GameMap {
     else this.map.fitBounds([[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]], { animate: false });
   }
 
-  toggleSatellite() {
-    this.satellite = !this.satellite;
+  setStyle(mode) {
+    if (mode === this.mode) return;
+    this.mode = mode;
     if (this.engine === 'gl') {
       this.ready = false;
-      this.map.setStyle(this.satellite ? satelliteStyle() : (dark() ? OFM + 'styles/dark' : OFM + 'styles/liberty'));
-    } else if (this.satellite) { this.map.removeLayer(this.street); this.sat.addTo(this.map); }
-    else { this.map.removeLayer(this.sat); this.street.addTo(this.map); }
-    return this.satellite;
+      this.map.setStyle(glStyle(mode));
+    } else {
+      if (mode === 'satellite') { this.map.removeLayer(this.street); this.sat.addTo(this.map); }
+      else { this.map.removeLayer(this.sat); this.street.addTo(this.map); }
+      this.el.classList.toggle('map-dark', mode === 'dark');
+    }
   }
 
   toggle3D() {

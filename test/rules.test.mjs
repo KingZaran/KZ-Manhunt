@@ -144,6 +144,100 @@ await t('hider who goes dark for 60 s is exposed', async () => {
   await refresh();
 });
 
+console.log('power-ups');
+const drop = (id, dN, dE, h, s2) => { const p = at(dN, dE); return [id, { lat: p.lat, lng: p.lng, h, s: s2 }]; };
+const put = (u, dN, dE, acc) => ok(op(u, 'set', G + '/locs/' + u, at(dN, dE, acc)));
+await refresh();
+await t('only the host can place drops', async () => {
+  await denied(op(B, 'set', G + '/drops/zzzzzz', Object.fromEntries([drop('zzzzzz', 0, 0, 'shield', 'reveal')])['zzzzzz']));
+  const ds = Object.fromEntries([
+    drop('dlook1', 200, 10, 'lookout', 'tracker'),
+    drop('dfrz02', 0, 5, 'shield', 'freeze'),
+    drop('dfar03', -100, 55, 'cloak', 'reveal'),
+    drop('dshd04', 205, 0, 'shield', 'reveal'),
+    drop('dshd05', -30, 5, 'shield', 'tracker'),
+    drop('dtrk06', 190, 0, 'lookout', 'tracker'),
+    drop('dclk07', 200, 3, 'cloak', 'freeze'),
+    drop('drev08', 0, 8, 'shield', 'reveal'),
+  ]);
+  const upd = {}; for (const [k, v] of Object.entries(ds)) upd['drops/' + k] = v;
+  await ok(op(A, 'update', G, upd));
+});
+const collect = (u, id, as) => op(u, 'set', G + `/drops/${id}/c`, { by: u, as, t: TS });
+const use = (u, id, kind, extra = {}) => op(u, 'update', G, { [`drops/${id}/u`]: TS, [`fx/${u}/${kind}`]: { t: TS, drop: id, ...extra } });
+await t('pick up a drop when standing 10 m from it', () => ok(collect(C, 'dlook1', 'hider')));
+await t('cannot pick up a drop 110 m away', () => denied(collect(A, 'dfar03', 'seeker')));
+await t('cannot pick up a drop someone already has', () => denied(collect(B, 'dlook1', 'seeker')));
+await t('cannot claim the other team\'s power', async () => {
+  await denied(collect(C, 'dshd04', 'seeker'));
+  await ok(collect(C, 'dshd04', 'hider'));
+});
+await t('cannot switch on an effect without using up a drop', () => denied(op(C, 'set', G + `/fx/${C}/lookout`, { t: TS, drop: 'dlook1' })));
+await t('cannot use a drop as a different power', () => denied(use(C, 'dlook1', 'cloak')));
+await t('cannot use someone else\'s drop', () => denied(use(D, 'dlook1', 'lookout')));
+await t('hider uses Lookout and can see the seekers', async () => {
+  await denied(op(C, 'get', G + '/locs/' + A));
+  await ok(use(C, 'dlook1', 'lookout'));
+  await ok(op(C, 'get', G + '/locs/' + A));
+});
+await t('a drop can only be used once', () => denied(use(C, 'dlook1', 'lookout')));
+await t('Lookout wears off after 20 s', async () => { await advance(21000); await refresh(); await denied(op(C, 'get', G + '/locs/' + A)); });
+await t('Freeze exposes hiders within 75 m, not further', async () => {
+  await ok(collect(A, 'dfrz02', 'seeker'));
+  await put(D, -30, 0);
+  const p = at(0, 0);
+  await denied(op(A, 'update', G, { 'drops/dfrz02/u': TS, freeze: { lat: p.lat + 0.01, lng: p.lng, t: TS, by: A, drop: 'dfrz02' } }), 'freeze far from seeker');
+  await ok(op(A, 'update', G, { 'drops/dfrz02/u': TS, freeze: { lat: p.lat, lng: p.lng, t: TS, by: A, drop: 'dfrz02' } }));
+  await ok(op(A, 'get', G + '/locs/' + D));       // 30 m away: frozen
+  await denied(op(A, 'get', G + '/locs/' + C));   // 200 m away: not
+});
+await t('Freeze wears off after 20 s', async () => { await advance(21000); await refresh(); await put(D, -30, 0); await denied(op(A, 'get', G + '/locs/' + D)); });
+await t('Shield blocks GPS catches for 30 s', async () => {
+  await ok(collect(D, 'dshd05', 'hider'));
+  await ok(use(D, 'dshd05', 'shield'));
+  await put(A, -28, 0);
+  await denied(op(A, 'set', G + '/caught/' + D, { by: A, t: TS, how: 'gps' }));
+  await advance(31000); await refresh(); await put(D, -30, 0); await put(A, -28, 0);
+  await ok(op(A, 'set', G + '/caught/' + D, { by: A, t: TS, how: 'gps' }), 'after the shield wears off');
+  await ok(op(A, 'set', G + '/caught/' + D, null)); // organiser undoes it so the test can carry on
+  await put(A, 0, 0);
+});
+await t('Tracker shows one chosen hider for 15 s', async () => {
+  await put(B, 190, 2);
+  await ok(collect(B, 'dtrk06', 'seeker'));
+  await denied(use(B, 'dtrk06', 'tracker', { target: A }), 'tracking a seeker');
+  await ok(use(B, 'dtrk06', 'tracker', { target: C }));
+  await ok(op(B, 'get', G + '/locs/' + C));
+  await denied(op(B, 'get', G + '/locs/' + D));
+  await advance(16000); await refresh(); await put(B, 190, 2);
+  await denied(op(B, 'get', G + '/locs/' + C));
+});
+await t('Cloak: an unanswered reveal doesn\'t expose you', async () => {
+  await ok(collect(C, 'dclk07', 'hider'));
+  await ok(use(C, 'dclk07', 'cloak'));
+  await advance(121000); await refresh(); await put(D, -30, 0);
+  const n = (await op(A, 'get', G + '/reveal')).value.n;
+  await ok(op(A, 'set', G + '/reveal', { n: n + 1, t: TS, by: A }));
+  await advance(21000); await refresh(); await put(D, -30, 0);
+  await denied(op(A, 'get', G + '/locs/' + C));   // cloaked, stays hidden
+  await ok(op(A, 'get', G + '/locs/' + D));       // not cloaked: exposed
+  const p = at(-30, 20);
+  await ok(op(D, 'set', G + '/circles/' + D, { n: n + 1, lat: p.lat, lng: p.lng, r: 75, t: TS }));
+});
+await t('Extra reveal skips the cooldown, but only by using a drop', async () => {
+  await put(A, 0, 0);
+  await ok(collect(A, 'drev08', 'seeker'));
+  const n = (await op(A, 'get', G + '/reveal')).value.n;
+  await denied(op(A, 'set', G + '/reveal', { n: n + 1, t: TS, by: A }), 'on cooldown');
+  await denied(op(A, 'set', G + '/reveal', { n: n + 1, t: TS, by: A, boost: 'drev08' }), 'boost without using the drop');
+  await ok(op(A, 'update', G, { 'drops/drev08/u': TS, reveal: { n: n + 1, t: TS, by: A, boost: 'drev08' } }));
+});
+await t('players can change name and colour mid-game, but not team', async () => {
+  await ok(op(C, 'update', G + '/players/' + C, { name: 'Kat', color: '#00ff00' }));
+  await denied(op(C, 'update', G + '/players/' + C, { role: 'seeker' }));
+});
+await refresh();
+
 console.log('other ways to be caught');
 await t('host cannot GPS-catch from afar', () => denied(op(A, 'set', G + '/caught/' + D, { by: A, t: TS, how: 'gps' })));
 await t('non-host cannot use host override', () => denied(op(B, 'set', G + '/caught/' + D, { by: B, t: TS, how: 'host' })));
@@ -160,8 +254,8 @@ await t('no catches after time runs out', async () => {
   await denied(op(A, 'set', G + '/caught/' + D, { by: A, t: TS, how: 'host' }));
 });
 await t('everyone can see everyone after the game', () => ok(op(A, 'get', G + '/locs/' + D)));
-await t('non-host cannot reset', () => denied(op(B, 'update', G, { caught: null, circles: null, reveal: null, 'meta/status': 'lobby' })));
-await t('host resets to lobby', () => ok(op(A, 'update', G, { caught: null, circles: null, reveal: null, 'meta/status': 'lobby' })));
+await t('non-host cannot reset', () => denied(op(B, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
+await t('host resets to lobby', () => ok(op(A, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
 
 srv.kill();
 console.log(`\n${passed} passed, ${failed} failed`);

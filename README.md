@@ -19,6 +19,18 @@ The rules are enforced by the database server (`firebase/database.rules.json`), 
 - **Timers use the server clock**, so changing a phone's time does nothing.
 - **Overrides are visible.** The organiser can mark someone caught without the GPS check if GPS is being awkward, but it's shown to everyone as an override. Hiders can also own up with "I was caught".
 
+## Power-ups
+
+The organiser chooses how many supply drops (purple diamonds) appear on the map. To pick one up, walk within about 12 m of it; the server checks you're really there. You get the power-up for the team you're on, and you can carry up to 3. Tap one in your bar to use it.
+
+| Hiders | Seekers |
+| --- | --- |
+| **Lookout**: see every seeker for 20 s | **Extra reveal**: reveal now, ignoring the cooldown |
+| **Shield**: can't be caught for 30 s | **Tracker**: see one chosen hider exactly for 15 s |
+| **Cloak**: left out of reveals for 3 min | **Freeze**: hiders within 75 m must freeze for 20 s, and seekers can see them |
+
+Every effect is enforced by the database rules, the same way catches are. A power-up only switches on by using up a drop you collected, and only for the team you collected it on. Used drops are replaced every couple of minutes by the organiser's phone.
+
 ## Setup (free, about 10 minutes)
 
 ### 1. Firebase (the live database)
@@ -43,7 +55,9 @@ The free Spark plan is far more than a group of friends needs.
 - The organiser creates a game, sets the play area and rules, and picks the seekers. Everyone else joins with the 5-letter code.
 - **Keep the game open on screen while you play.** Websites can't track location in the background, so the game keeps the screen awake.
 - On older iPhones (iOS below 18.4), play in a **Safari tab**, not from a Home Screen icon. Those iOS versions can't keep a Home Screen web app awake.
-- GPS is roughly ±5–15 m outdoors. If a catch is refused even though you're touching, stand together for a few seconds and try again.
+- GPS is roughly ±5–15 m outdoors. The game smooths it, so people standing still don't drift around the map. For catches and pick-ups it uses your latest reading. If a catch is refused even though you're touching, stand together for a few seconds and try again.
+- Tap your name (in the lobby, or bottom-left in a game) to change your name or colour. Each player has their own colour.
+- Use the layers button to switch the map between Light, Dark and Satellite. The 3D button tilts the map.
 
 ## Development
 

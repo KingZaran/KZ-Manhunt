@@ -55,6 +55,24 @@ const DIST2 = (a, b) =>
   `${sq(`(${a}.child('lng').val() - ${b}.child('lng').val()) * ${M}.child('area/mlon').val()`)}`;
 const AREA = `${M}.child('area')`;
 
+// ---- power-ups ----
+// Drops are placed by the organiser. Anyone standing within PICKUP_M of one can collect it
+// (it becomes theirs, tied to the team they were on). Using one marks the drop used in the same
+// atomic write that switches the effect on, and the rules check both halves.
+const PICKUP_M = 15;
+const FREEZE_M = 75;
+const FREEZE_MS = 20000;
+const POWER_MS = { lookout: 20000, shield: 30000, cloak: 180000, tracker: 15000 };
+const DROP = (id) => `${G}.child('drops/' + ${id})`;
+const FX = (u, k) => `${G}.child('fx/' + ${u} + '/${k}')`;
+const ACTIVE = (u, k) => `(${FX(u, k)}.child('t').val() > now - ${POWER_MS[k]})`;
+// `ng` = the post-write snapshot of games/$g, reached from wherever the rule sits.
+const CONSUME = (id, kind, ng) => `(${DROP(id)}.child('c/by').val() == auth.uid && !${DROP(id)}.child('u').exists()
+  && ${ng}.child('drops/' + ${id} + '/u').val() == now
+  && ((${DROP(id)}.child('c/as').val() == 'hider' && ${HIDER('auth.uid')} && ${DROP(id)}.child('h').val() == ${kind})
+   || (${DROP(id)}.child('c/as').val() == 'seeker' && ${SEEKER('auth.uid')} && ${DROP(id)}.child('s').val() == ${kind})))`;
+const FREEZE = `${G}.child('freeze')`;
+
 const num = (min, max) => ({ '.validate': `newData.isNumber() && newData.val() >= ${min} && newData.val() <= ${max}` });
 const str = (maxLen) => ({ '.validate': `newData.isString() && newData.val().length >= 1 && newData.val().length <= ${maxLen}` });
 const NO_OTHER = { $other: { '.validate': false } };
@@ -92,6 +110,7 @@ const rules = {
             revealCooldownSecs: num(30, 1800),
             revealRadius: num(25, 500),
             darkSecs: num(20, 600),
+            powerups: num(0, 20),
             hidersSeeSeekers: { '.validate': 'newData.isBoolean()' },
             ...NO_OTHER,
           },
@@ -109,12 +128,13 @@ const rules = {
         players: {
           '.read': 'auth != null',
           $uid: {
-            // Join/leave/rename only in the lobby. Only the organiser picks teams.
-            '.write': one(`auth != null && ${LOBBY} && (
-              auth.uid == ${HOST}
-              || (auth.uid == $uid && (
+            // Join/leave only in the lobby; name and colour can change any time.
+            // Only the organiser picks teams.
+            '.write': one(`auth != null && (
+              (${LOBBY} && auth.uid == ${HOST})
+              || (auth.uid == $uid && data.exists() && newData.exists() && newData.child('role').val() == data.child('role').val())
+              || (${LOBBY} && auth.uid == $uid && (
                    (!data.exists() && newData.child('role').val() == 'hider')
-                   || (data.exists() && newData.exists() && newData.child('role').val() == data.child('role').val())
                    || !newData.exists())))`),
             '.validate': `newData.hasChildren(['name', 'role', 'color', 'joinedAt'])`,
             name: str(20),
@@ -132,14 +152,18 @@ const rules = {
               || (${IN_GAME('auth.uid')} && (
                    ${ENDED}
                    || ${LOBBY}
-                   || (${SEEKER('$uid')} && (${SEEKER('auth.uid')} || ${HIDING} || ${S('hidersSeeSeekers')} == true))
+                   || (${SEEKER('$uid')} && (${SEEKER('auth.uid')} || ${HIDING} || ${S('hidersSeeSeekers')} == true
+                        || (${HIDER('auth.uid')} && ${ACTIVE('auth.uid', 'lookout')})))
                    || (${HIDER('$uid')} && ${HIDER('auth.uid')})
                    || (${HIDER('$uid')} && ${SEEKER('auth.uid')} && ${LIVE} && now >= ${HUNT_START} && data.exists() && (
                         data.child('t').val() < now - ${S('darkSecs')} * 1000
                         || ${DIST2('data', AREA)} > ${AREA}.child('r').val() * ${AREA}.child('r').val()
                         || (${G}.child('reveal').exists()
                             && ${G}.child('reveal/t').val() < now - ${REVEAL_ANSWER_MS}
-                            && ${G}.child('circles/' + $uid + '/n').val() != ${G}.child('reveal/n').val()))))))`),
+                            && ${G}.child('circles/' + $uid + '/n').val() != ${G}.child('reveal/n').val()
+                            && !(${FX('$uid', 'cloak')}.child('t').val() > ${G}.child('reveal/t').val() - ${POWER_MS.cloak}))
+                        || (${FX('auth.uid', 'tracker')}.child('target').val() == $uid && ${ACTIVE('auth.uid', 'tracker')})
+                        || (${FREEZE}.child('t').val() > now - ${FREEZE_MS} && ${DIST2('data', FREEZE)} <= ${FREEZE_M * FREEZE_M}))))))`),
             '.write': `auth != null && auth.uid == $uid && ${IN_GAME('$uid')} && ${STATUS} != 'ended'`,
             '.validate': `newData.hasChildren(['lat', 'lng', 'acc', 't']) && newData.child('t').val() == now`,
             lat: num(-90, 90),
@@ -161,6 +185,7 @@ const rules = {
                   (newData.child('how').val() == 'gps' && $h != auth.uid && ${SEEKER('auth.uid')}
                     && ${FRESH('auth.uid')} && ${FRESH('$h')}
                     && ${ACCURATE('auth.uid')} && ${ACCURATE('$h')}
+                    && !${ACTIVE('$h', 'shield')}
                     && ${DIST2(LOC('auth.uid'), LOC('$h'))} <= ${S('tagRadius')} * ${S('tagRadius')})
                   || (newData.child('how').val() == 'self' && auth.uid == $h)
                   || (newData.child('how').val() == 'host' && auth.uid == ${HOST})))
@@ -180,14 +205,16 @@ const rules = {
             (${HUNTING} && ${SEEKER('auth.uid')}
               && newData.child('by').val() == auth.uid && newData.child('t').val() == now
               && ((!data.exists() && newData.child('n').val() == 1
-                    && now >= ${HUNT_START} + ${S('revealCooldownSecs')} * 1000)
+                    && (now >= ${HUNT_START} + ${S('revealCooldownSecs')} * 1000 || newData.child('boost').exists()))
                   || (data.exists() && newData.child('n').val() == data.child('n').val() + 1
-                    && now >= data.child('t').val() + ${S('revealCooldownSecs')} * 1000)))
+                    && (now >= data.child('t').val() + ${S('revealCooldownSecs')} * 1000 || newData.child('boost').exists())))
+              && (!newData.child('boost').exists() || ${CONSUME("newData.child('boost').val()", "'reveal'", 'newData.parent()')}))
             || (!newData.exists() && auth.uid == ${HOST} && ${NOT_ACTIVE}))`),
           '.validate': `newData.hasChildren(['n', 't', 'by'])`,
           n: { '.validate': 'newData.isNumber()' },
           t: { '.validate': 'newData.isNumber()' },
           by: { '.validate': 'newData.isString()' },
+          boost: { '.validate': 'newData.isString()' },
           ...NO_OTHER,
         },
 
@@ -214,6 +241,80 @@ const rules = {
             t: { '.validate': 'newData.isNumber()' },
             ...NO_OTHER,
           },
+        },
+
+        drops: {
+          '.read': `auth != null && ${IN_GAME('auth.uid')}`,
+          '.write': hostReset,
+          $id: {
+            '.write': `auth != null && auth.uid == ${HOST} && !data.exists() && newData.exists() && (${LOBBY} || ${LIVE})`,
+            '.validate': `$id.matches(/^[a-z0-9]{6,12}$/) && newData.hasChildren(['lat', 'lng', 'h', 's'])`,
+            lat: num(-90, 90),
+            lng: num(-180, 180),
+            h: { '.validate': `newData.val() == 'lookout' || newData.val() == 'shield' || newData.val() == 'cloak'` },
+            s: { '.validate': `newData.val() == 'reveal' || newData.val() == 'tracker' || newData.val() == 'freeze'` },
+            // Collect: only while hunting, only within ${PICKUP_M} m by fresh, accurate GPS.
+            c: {
+              '.write': one(`auth != null && !data.exists() && ${HUNTING}
+                && newData.child('by').val() == auth.uid && newData.child('t').val() == now
+                && ((newData.child('as').val() == 'hider' && ${HIDER('auth.uid')})
+                    || (newData.child('as').val() == 'seeker' && ${SEEKER('auth.uid')}))
+                && ${FRESH('auth.uid')} && ${ACCURATE('auth.uid')}
+                && ${DIST2(LOC('auth.uid'), DROP('$id'))} <= ${PICKUP_M * PICKUP_M}`),
+              '.validate': `newData.hasChildren(['by', 'as', 't'])`,
+              by: { '.validate': 'newData.isString()' },
+              as: { '.validate': `newData.val() == 'hider' || newData.val() == 'seeker'` },
+              t: { '.validate': 'newData.isNumber()' },
+              ...NO_OTHER,
+            },
+            // Use: written together with the effect it switches on.
+            u: {
+              '.write': one(`auth != null && !data.exists() && newData.val() == now && ${HUNTING}
+                && ${DROP('$id')}.child('c/by').val() == auth.uid
+                && (${['lookout', 'shield', 'cloak', 'tracker'].map((k) =>
+                  `(newData.parent().parent().parent().child('fx/' + auth.uid + '/${k}/drop').val() == $id && newData.parent().parent().parent().child('fx/' + auth.uid + '/${k}/t').val() == now)`).join(' || ')}
+                  || (newData.parent().parent().parent().child('freeze/drop').val() == $id && newData.parent().parent().parent().child('freeze/t').val() == now)
+                  || (newData.parent().parent().parent().child('reveal/boost').val() == $id && newData.parent().parent().parent().child('reveal/t').val() == now))`),
+              '.validate': 'newData.isNumber()',
+            },
+            ...NO_OTHER,
+          },
+        },
+
+        // Active effects: fx/<player>/<lookout|shield|cloak|tracker> = { t, drop, target? }
+        fx: {
+          '.read': `auth != null && ${IN_GAME('auth.uid')}`,
+          '.write': hostReset,
+          $uid: {
+            $kind: {
+              '.write': one(`auth != null && auth.uid == $uid && ${HUNTING}
+                && newData.child('t').val() == now
+                && ${CONSUME("newData.child('drop').val()", '$kind', 'newData.parent().parent().parent()')}
+                && ($kind != 'tracker' || ${HIDER("newData.child('target').val()")})`),
+              '.validate': `$kind.matches(/^(lookout|shield|cloak|tracker)$/) && newData.hasChildren(['t', 'drop'])`,
+              t: { '.validate': 'newData.isNumber()' },
+              drop: { '.validate': 'newData.isString()' },
+              target: { '.validate': 'newData.isString()' },
+              ...NO_OTHER,
+            },
+          },
+        },
+
+        // Freeze: hiders within ${FREEZE_M} m of where a seeker used it are visible to seekers for ${FREEZE_MS / 1000} s.
+        freeze: {
+          '.read': `auth != null && ${IN_GAME('auth.uid')}`,
+          '.write': one(`auth != null && (
+            (${HUNTING} && ${SEEKER('auth.uid')} && newData.child('by').val() == auth.uid && newData.child('t').val() == now
+              && ${CONSUME("newData.child('drop').val()", "'freeze'", 'newData.parent()')}
+              && ${FRESH('auth.uid')} && ${DIST2('newData', LOC('auth.uid'))} <= 625)
+            || (!newData.exists() && auth.uid == ${HOST} && ${NOT_ACTIVE}))`),
+          '.validate': `newData.hasChildren(['lat', 'lng', 't', 'by', 'drop'])`,
+          lat: num(-90, 90),
+          lng: num(-180, 180),
+          t: { '.validate': 'newData.isNumber()' },
+          by: { '.validate': 'newData.isString()' },
+          drop: { '.validate': 'newData.isString()' },
+          ...NO_OTHER,
         },
 
         ...NO_OTHER,

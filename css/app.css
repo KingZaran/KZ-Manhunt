@@ -264,3 +264,45 @@ body.is-host .guest-only { display: none !important; }
   .sheet, .toast, .me-dot, .pin.exposed .pin-dot { animation: none; }
   .btn { transition: none; }
 }
+
+/* Leaflet fallback has no dark tiles without an API key, so dim and invert the street map. */
+.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9); }
+
+/* profile */
+.lobby-head-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.profile-btn, .me-btn {
+  appearance: none; border: 0; background: var(--card); color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px;
+  font: 600 15px var(--body); max-width: 60vw;
+}
+.profile-btn span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-btn { background: transparent; padding: 0; gap: 6px; font-size: 15px; }
+.me-btn .player-dot, .profile-btn .player-dot { width: 26px; height: 26px; font-size: 15px; }
+.dock-status { align-items: center; }
+.colours .colour { display: grid; place-items: center; color: #fff; font: 700 16px var(--display); }
+.colour:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+
+/* power-ups */
+.dock-powers { display: flex; gap: 8px; overflow-x: auto; margin: -2px 0 10px; padding-bottom: 2px; scrollbar-width: none; }
+.power {
+  appearance: none; border: 0; cursor: pointer; flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 999px; font: 700 16px var(--display); color: #fff; background: #7B3FE4;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.18);
+}
+.power span { font-size: 17px; }
+.power.dead { background: var(--line); color: var(--muted); box-shadow: none; }
+.fx-chip {
+  flex: none; display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px;
+  font: 600 14px var(--body); background: var(--paper); box-shadow: inset 0 0 0 2px #7B3FE4; color: var(--ink);
+}
+.pin.drop { transform: translate(-50%, -14px); }
+.drop-gem {
+  width: 22px; height: 22px; background: #7B3FE4; border: 3px solid #fff; transform: rotate(45deg); border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35); margin: 3px;
+}
+.pin.drop.near .drop-gem { animation: gem 1.2s ease-in-out infinite; }
+@keyframes gem { 50% { transform: rotate(45deg) scale(1.2); } }
+.pin.drop .pin-label { background: #7B3FE4; margin-top: 4px; }
+.circle-label.freeze { background: #2FA8E0; }
+.hold.freeze { background: rgba(23, 92, 130, 0.88); }
+@media (prefers-reduced-motion: reduce) { .pin.drop.near .drop-gem { animation: none; } }

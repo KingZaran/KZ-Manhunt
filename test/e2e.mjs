@@ -92,6 +92,22 @@ try {
   check(await waitFor(async () => (await bob.locator('[data-k="hideSecs"][data-v="60"][aria-pressed="true"]').count()) === 1), 'guests see settings');
   await waitFor(async () => (await text(ann, '#player-list')).split('GPS ok').length === 4, 6000, 'all GPS ok');
   await shot(ann, '02-lobby-host');
+
+  console.log('profile and map style');
+  const annColour = await ann.evaluate(() => getComputedStyle(document.querySelector('#profile-btn .player-dot')).backgroundColor);
+  await bob.click('#profile-btn');
+  check((await bob.locator('#pf-colours .colour:disabled').count()) >= 2, 'other players\' colours are greyed out');
+  const free = bob.locator('#pf-colours .colour:not(:disabled):not([aria-checked="true"])').first();
+  const freeColour = await free.getAttribute('data-pc');
+  await free.click();
+  await bob.click('#pf-save');
+  check(await waitFor(async () => (await ann.locator('#player-list').innerHTML()).toLowerCase().includes(freeColour.toLowerCase())), 'colour change shows for everyone');
+  check(annColour !== null, 'host has a colour');
+  await ann.click('#lobby-style');
+  await ann.click('[data-action="set-map-style"][data-v="dark"]');
+  check(await waitFor(async () => (await ann.locator('#lobby-map.map-dark').count()) === 1), 'map style switches to dark');
+  await ann.click('#lobby-style');
+  await ann.click('[data-action="set-map-style"][data-v="light"]');
   await shot(bob, '03-lobby-guest');
   check(await bob.locator('#start').isHidden(), 'guests cannot see Start');
 
@@ -116,6 +132,19 @@ try {
   await shot(ann, '06-catch-sheet');
   const catUid = await cat.evaluate(() => localStorage.getItem('shimUid'));
   const bobUid = await bob.evaluate(() => localStorage.getItem('shimUid'));
+
+  console.log('power-ups');
+  const catPos = at(200, 0);
+  const put = (uid, p, v) => fetch(BASE + '/__db/op', { method: 'POST', body: JSON.stringify({ uid, op: 'set', path: `games/${code}/${p}`, value: v }) }).then((r) => r.json());
+  check((await put(annUid, 'drops/testlk01', { lat: catPos.latitude + 4 / 111320, lng: catPos.longitude, h: 'lookout', s: 'tracker' })).ok, 'host drops a power-up next to Cat');
+  check(await waitFor(async () => (await toasts(cat)).includes('Picked up'), 10000), 'Cat picks it up by walking over it');
+  check(await waitFor(async () => (await cat.locator('.power').count()) === 1), 'it appears in Cat\'s bag');
+  check((await cat.locator('#game-map .pin.seeker').count()) === 0, 'Cat can\'t see the seeker yet');
+  await cat.click('.power');
+  await cat.click('[data-action="use-power"]');
+  check(await waitFor(async () => (await cat.locator('#game-map .pin.seeker').count()) >= 1, 8000), 'Lookout shows Cat the seeker');
+  check(await waitFor(async () => (await cat.locator('.fx-chip').innerText()).includes('Lookout')), 'Lookout timer shows');
+  await shot(cat, '13-lookout');
   await ann.click(`[data-action="catch"][data-uid="${catUid}"]`);
   check(await waitFor(async () => (await toasts(ann)).includes('Not counted')), 'catch from 200 m is refused');
   await shot(ann, '07-catch-refused');

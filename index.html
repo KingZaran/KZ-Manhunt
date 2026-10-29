@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="css/app.css?v=mvtz4k31">
+  <link rel="stylesheet" href="css/app.css?v=mvu1ybvp">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -69,7 +69,10 @@
   <!-- Lobby -->
   <main id="lobby" class="screen lobby" hidden>
     <header class="lobby-head">
-      <button class="btn-text" data-action="leave">Leave</button>
+      <div class="lobby-head-left">
+        <button class="btn-text" data-action="leave">Leave</button>
+        <button class="profile-btn" id="profile-btn" data-action="profile" aria-label="Edit your name and colour"></button>
+      </div>
       <div class="code-block">
         <span class="code-label">Join code</span>
         <button id="code-big" class="code-big" data-action="share-code" aria-label="Share join code"></button>
@@ -97,7 +100,7 @@
       <p id="area-hint" class="muted small"></p>
       <div class="row">
         <button class="btn btn-quiet host-only" data-action="area-here">Centre on me</button>
-        <button class="btn btn-quiet" data-action="lobby-sat" id="lobby-sat">Satellite</button>
+        <button class="btn btn-quiet" data-action="map-style" id="lobby-style">Map: Light</button>
       </div>
       <div id="area-radius" class="host-only"></div>
     </section>
@@ -131,11 +134,14 @@
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <button class="tool" data-action="three-d" id="threed-btn" aria-label="Tilt to 3D" aria-pressed="false" hidden>3D</button>
-        <button class="tool" data-action="layers" id="layer-btn" aria-label="Show satellite view">Sat</button>
+        <button class="tool" data-action="map-style" id="layer-btn" aria-label="Map style">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5Z" fill="currentColor"/><path d="m2 12 10 5 10-5M2 16l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
       </div>
     </div>
     <footer class="dock">
       <div id="dock-status" class="dock-status"></div>
+      <div id="dock-powers" class="dock-powers" hidden></div>
       <div id="dock-actions" class="dock-actions"></div>
     </footer>
     <div id="hold" class="hold" hidden></div>
@@ -161,6 +167,6 @@
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="js/app.js?v=mvtz4k31"></script>
+  <script type="module" src="js/app.js?v=mvu1ybvp"></script>
 </body>
 </html>
