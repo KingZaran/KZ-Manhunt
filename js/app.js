@@ -1,6 +1,6 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvtz1vlm';
-import { GameMap, loadEngine } from './map.js?v=mvtz1vlm';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtz1vlm';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvtz4k31';
+import { GameMap, loadEngine } from './map.js?v=mvtz4k31';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtz4k31';
 
 /* ------------------------------------------------------------------ constants */
 
@@ -469,6 +469,7 @@ async function onClick(e) {
     case 'layers': return toggleLayers();
     case 'three-d': return toggle3D();
     case 'lobby-sat': return toggleLobbySatellite();
+    case 'gps-help': return gpsHelp();
     case 'again': return backToLobby();
     case 'close-sheet': return closeSheet();
     case 'wake': return wake.enable();
@@ -651,13 +652,17 @@ function render() {
 }
 
 function gpsLine() {
-  if (S.gpsErr) {
-    return S.gpsErr.code === 1
-      ? 'Location is blocked. On iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using. On Android: tap the lock icon by the address bar → Permissions → Location.'
-      : 'Can\'t get a GPS fix. Move into the open.';
-  }
+  if (S.gpsErr) return S.gpsErr.code === 1 ? 'Location is blocked' : 'No GPS signal. Move into the open.';
   if (!S.fix) return 'Waiting for GPS…';
   return `GPS ±${S.fix.acc} m${S.fix.acc > MAX_ACC ? ' (rough)' : ''}`;
+}
+function gpsHelp() {
+  openSheet(`<h2>Allow location</h2>
+    <p>The game needs your location to work. After changing the setting, reload the page.</p>
+    <p><b>iPhone:</b> Settings → Privacy &amp; Security → Location Services → Safari Websites → While Using the App. Also make sure Precise Location is on.</p>
+    <p><b>Android (Chrome):</b> tap the icon left of the address bar → Permissions → Location → Allow.</p>
+    <div class="pick"><button class="btn btn-primary" id="sheet-ok">Reload</button><button class="btn btn-quiet" data-action="close-sheet">Close</button></div>`);
+  $('#sheet-ok').onclick = () => location.reload();
 }
 
 function renderLobby() {
@@ -687,7 +692,7 @@ function renderLobby() {
   const st = settings();
   setHTML($('#settings'), SETTING_DEFS.map((d) => `<div class="setting"><div class="setting-label"><span>${d.label}</span>${d.note ? `<span class="muted">${d.note}</span>` : ''}</div>${seg('setting', d.k, d.opts, st[d.k], d.fmt, host)}</div>`).join(''));
 
-  $('#gps-status').textContent = gpsLine();
+  setHTML($('#gps-status'), S.gpsErr && S.gpsErr.code === 1 ? `${esc(gpsLine())}. <button class="btn-link" data-action="gps-help">How to fix</button>` : esc(gpsLine()));
   const hiders = ids.length - seekers;
   $('#start').disabled = !(a && seekers && hiders);
   $('#start').textContent = !a ? 'Set the play area to start' : !seekers ? 'Pick a seeker to start' : !hiders ? 'Someone has to hide' : 'Start game';
@@ -739,7 +744,8 @@ function renderGame(ph) {
   const myLoc = S.fix && { lat: S.fix.lat, lng: S.fix.lng };
   const mineC = S.circles[S.uid];
   let banner = null, danger = false;
-  if (S.gpsErr || !S.fix) banner = gpsLine();
+  if (S.gpsErr && S.gpsErr.code === 1) { banner = 'Location is blocked, so the game can\'t see where you are. Tap for how to fix it.'; danger = true; }
+  else if (S.gpsErr || !S.fix) banner = gpsLine();
   else if (role === 'hider' && ph === 'hunt' && outside(myLoc)) { banner = 'You\'re outside the play area. Seekers can see exactly where you are.'; danger = true; }
   else if (role === 'hider' && ph === 'hunt' && S.reveal && (!mineC || mineC.n !== S.reveal.n) && now - S.reveal.t > REVEAL_ANSWER_MS) { banner = 'Your phone missed the reveal, so seekers can see exactly where you are.'; danger = true; }
   else if (outside(myLoc)) banner = 'You\'re outside the play area.';
@@ -747,7 +753,7 @@ function renderGame(ph) {
   else if (!wake.active) banner = wake.supported ? 'Tap here to keep the screen on. If it locks, your location stops updating.' : 'Set Auto-Lock to Never while you play. If the screen locks, your location stops updating.';
   const bEl = $('#banner');
   bEl.hidden = !banner;
-  if (banner) { bEl.textContent = banner; bEl.className = 'banner' + (danger ? ' danger' : ''); bEl.dataset.action = wake.active ? '' : 'wake'; }
+  if (banner) { bEl.textContent = banner; bEl.className = 'banner' + (danger ? ' danger' : ''); bEl.dataset.action = S.gpsErr && S.gpsErr.code === 1 ? 'gps-help' : (wake.active ? '' : 'wake'); }
 
   // dock
   let edge = '';

@@ -106,9 +106,12 @@ export class GameMap {
       if (mq.addEventListener) mq.addEventListener('change', onTheme); else if (mq.addListener) mq.addListener(onTheme);
     }
     // Start with the attribution collapsed to its (i) button so it doesn't cover a small map.
-    this.map.once('load', () => {
+    // MapLibre re-expands it whenever the style changes, unless the player opened it themselves.
+    let userOpened = false;
+    this.el.addEventListener('click', (e) => { if (e.target.closest('.maplibregl-ctrl-attrib-button')) userOpened = !userOpened; });
+    this.map.on('styledata', () => {
       const a = this.el.querySelector('.maplibregl-ctrl-attrib');
-      if (a) a.classList.remove('maplibregl-compact-show');
+      if (a && !userOpened) a.classList.remove('maplibregl-compact-show');
     });
     this.map.on('style.load', () => { this.ready = true; this.addOverlay(); this.apply3D(false); this.flushCircles(); });
     this.map.on('click', (e) => this.onClick(e.lngLat.lat, e.lngLat.lng));
