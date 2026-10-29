@@ -648,7 +648,8 @@ function toggleLayers() {
 function scheduleRender() {
   if (S.renderQueued) return;
   S.renderQueued = true;
-  requestAnimationFrame(() => { S.renderQueued = false; render(); });
+  // setTimeout rather than requestAnimationFrame: rAF stops entirely in background/hidden views.
+  setTimeout(() => { S.renderQueued = false; render(); }, 16);
 }
 
 function render() {
