@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#14231D">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Manhunt">
+  <title>Manhunt</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="boot" class="boot">
+    <p class="boot-msg">Connecting…</p>
+  </div>
+
+  <!-- Home -->
+  <main id="home" class="screen home" hidden>
+    <div class="home-hero" aria-hidden="true">
+      <svg class="contours" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
+        <g fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M-20 300 C60 240 120 330 200 270 S330 200 420 250"/>
+          <path d="M-20 260 C70 200 130 290 205 230 S320 160 420 210"/>
+          <path d="M-20 220 C80 165 140 250 210 190 S315 125 420 170"/>
+          <path d="M-20 180 C90 130 150 210 215 152 S310 92 420 130"/>
+          <path d="M-20 140 C100 100 160 172 220 116 S305 62 420 92"/>
+          <path d="M-20 100 C110 72 170 136 226 82 S300 36 420 56"/>
+          <path d="M-20 340 C50 285 110 370 195 312 S340 245 420 292"/>
+        </g>
+        <circle class="zone" cx="250" cy="170" r="92" fill="none" stroke-width="3" stroke-dasharray="10 9"/>
+        <circle class="dot-h" cx="226" cy="150" r="7"/>
+        <circle class="dot-s" cx="300" cy="214" r="7"/>
+      </svg>
+    </div>
+    <div class="home-body">
+      <h1 class="wordmark">Manhunt</h1>
+      <p class="tagline">Real-world hide and seek. You only get the catch if you're actually within reach.</p>
+
+      <label class="field">
+        <span>Your name</span>
+        <input id="name" maxlength="20" autocomplete="nickname" placeholder="e.g. Zaran">
+      </label>
+      <div class="field">
+        <span>Your colour</span>
+        <div id="colours" class="colours" role="radiogroup" aria-label="Your colour"></div>
+      </div>
+
+      <button id="create" class="btn btn-primary btn-block">Create a game</button>
+
+      <form id="join-form" class="join">
+        <label class="field grow">
+          <span>Got a code?</span>
+          <input id="code" maxlength="5" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCDE">
+        </label>
+        <button class="btn btn-ink" type="submit">Join</button>
+      </form>
+      <p id="home-error" class="error" role="alert"></p>
+    </div>
+  </main>
+
+  <!-- Lobby -->
+  <main id="lobby" class="screen lobby" hidden>
+    <header class="lobby-head">
+      <button class="btn-text" data-action="leave">Leave</button>
+      <div class="code-block">
+        <span class="code-label">Join code</span>
+        <button id="code-big" class="code-big" data-action="share-code" aria-label="Share join code"></button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Players</h2>
+        <span id="team-counts" class="muted"></span>
+      </div>
+      <p id="team-hint" class="muted small"></p>
+      <ul id="player-list" class="players"></ul>
+      <div class="row host-only">
+        <button class="btn btn-quiet" data-action="shuffle">Random seeker</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Play area</h2>
+        <span id="area-size" class="muted"></span>
+      </div>
+      <div id="lobby-map" class="lobby-map"></div>
+      <p id="area-hint" class="muted small"></p>
+      <div class="row host-only">
+        <button class="btn btn-quiet" data-action="area-here">Centre on me</button>
+      </div>
+      <div id="area-radius" class="host-only"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Rules</h2></div>
+      <div id="settings"></div>
+    </section>
+
+    <div class="lobby-foot">
+      <p id="gps-status" class="muted small"></p>
+      <button id="start" class="btn btn-primary btn-block host-only" data-action="start">Start game</button>
+      <p class="guest-only muted center">Waiting for <strong id="host-name">the organiser</strong> to start.</p>
+    </div>
+  </main>
+
+  <!-- Game -->
+  <main id="game" class="screen game" hidden>
+    <header id="clock" class="clock">
+      <div class="clock-time" id="clock-time">--:--</div>
+      <div class="clock-meta">
+        <div id="clock-phase" class="clock-phase"></div>
+        <div id="clock-sub" class="clock-sub"></div>
+      </div>
+    </header>
+    <div id="banner" class="banner" hidden></div>
+    <div class="map-wrap">
+      <div id="game-map" class="game-map"></div>
+      <div class="map-tools">
+        <button class="tool" data-action="recentre" aria-label="Centre on me">◎</button>
+        <button class="tool" data-action="layers" id="layer-btn" aria-label="Switch map style">Sat</button>
+      </div>
+    </div>
+    <footer class="dock">
+      <div id="dock-status" class="dock-status"></div>
+      <div id="dock-actions" class="dock-actions"></div>
+    </footer>
+    <div id="hold" class="hold" hidden></div>
+  </main>
+
+  <!-- End -->
+  <main id="end" class="screen end" hidden>
+    <header id="end-head" class="end-head"></header>
+    <div id="end-map" class="end-map"></div>
+    <section class="panel">
+      <h2>How it went</h2>
+      <ol id="end-log" class="log"></ol>
+    </section>
+    <div class="end-foot">
+      <button class="btn btn-primary btn-block host-only" data-action="again">Back to lobby</button>
+      <p class="guest-only muted center">The organiser can take everyone back to the lobby.</p>
+      <button class="btn btn-quiet btn-block" data-action="leave">Leave game</button>
+    </div>
+  </main>
+
+  <div id="sheet-scrim" class="scrim" hidden></div>
+  <section id="sheet" class="sheet" hidden role="dialog" aria-modal="true"></section>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
