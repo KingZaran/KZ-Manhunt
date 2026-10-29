@@ -1,5 +1,5 @@
 // Thin wrapper around the Firebase SDK (loaded from Google's CDN, no build step).
-import { firebaseConfig } from './config.js';
+import { firebaseConfig } from './config.js?v=mvtyf573';
 
 const CDN = 'https://www.gstatic.com/firebasejs/10.12.2/';
 

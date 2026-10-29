@@ -37,7 +37,7 @@ async function phone(label, pos) {
     const file = route.request().url().split('/').pop();
     route.fulfill({ contentType: 'text/javascript', body: readFileSync(HERE + 'firebase-shim/' + file, 'utf8') });
   });
-  await ctx.route('**/js/config.js', (route) => route.fulfill({ contentType: 'text/javascript', body: `export const firebaseConfig = { apiKey: 'test', databaseURL: '${BASE}' };` }));
+  await ctx.route(/\/js\/config\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: `export const firebaseConfig = { apiKey: 'test', databaseURL: '${BASE}' };` }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com|basemaps\.cartocdn\.com|arcgisonline\.com/, (route) => route.abort());
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));

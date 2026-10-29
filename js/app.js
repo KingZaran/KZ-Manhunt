@@ -1,5 +1,5 @@
-import { connect, isConfigured, isDenied } from './fb.js';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvtyf573';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate } from './geo.js?v=mvtyf573';
 
 /* ------------------------------------------------------------------ constants */
 

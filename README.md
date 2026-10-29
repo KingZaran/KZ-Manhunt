@@ -49,6 +49,7 @@ The free Spark plan is far more than a group of friends needs.
 
 There's no build step: it's static HTML, CSS and JavaScript. Leaflet is vendored in `vendor/leaflet`, and the Firebase SDK loads from Google's CDN.
 
+- After changing anything in `js/` or `css/`, run `node tools/bump-version.mjs` so phones load the new files instead of a cached copy.
 - Rules source: `tools/build-rules.mjs`. Run `node tools/build-rules.mjs` to regenerate the JSON.
 - Rules tests: `node test/rules.test.mjs`. These run against `test/mock-server.mjs`, a small stand-in for Firebase that evaluates the same rules file.
 - End-to-end test: `node test/e2e.mjs`. This plays a full game with three simulated phones and fake GPS, and needs Playwright.
