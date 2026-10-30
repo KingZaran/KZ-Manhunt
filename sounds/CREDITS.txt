@@ -1,0 +1,6 @@
+Sound effects for Manhunt.
+
+Many are adapted from Kenney's free audio packs (Interface Sounds, Digital Audio, Impact Sounds,
+Sci-fi Sounds), released under CC0 1.0 (public domain): https://kenney.nl/assets
+The rest (whistle, siren, sonar ping, jingles, breathing, smoke, flare, shimmer) are synthesised
+by tools/build-sounds.py and are free to use.

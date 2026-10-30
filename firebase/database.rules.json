@@ -26,9 +26,9 @@
             ".validate": "newData.isNumber()"
           },
           "settings": {
-            ".validate": "newData.hasChildren(['hideSecs', 'gameMins', 'tagRadius', 'revealCooldownSecs', 'revealRadius', 'darkSecs', 'hidersSeeSeekers'])",
+            ".validate": "newData.hasChildren(['hideSecs', 'gameMins', 'tagRadius', 'revealCooldownSecs', 'revealRadius', 'darkSecs'])",
             "hideSecs": {
-              ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 3600"
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7200"
             },
             "gameMins": {
               ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 240"
@@ -36,20 +36,103 @@
             "tagRadius": {
               ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 25"
             },
+            "shrinkPct": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100"
+            },
+            "runKmh": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 40"
+            },
+            "printSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 3600"
+            },
+            "printLead": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60"
+            },
+            "staminaSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 600"
+            },
+            "refillSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 3600"
+            },
+            "groupM": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500"
+            },
+            "breathSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 600"
+            },
+            "freezeM": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 2000"
+            },
+            "freezeCd": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 3600"
+            },
+            "coverSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 300"
+            },
+            "holdSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 600"
+            },
+            "driftM": {
+              ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 200"
+            },
+            "campMins": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 120"
+            },
+            "campM": {
+              ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 1000"
+            },
+            "burnM": {
+              ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 1000"
+            },
+            "graceSecs": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 3600"
+            },
+            "missions": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20"
+            },
+            "missionHold": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 900"
+            },
+            "missionStart": {
+              ".validate": "newData.isNumber() && newData.val() >= 30 && newData.val() <= 3600"
+            },
+            "missionM": {
+              ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 1000"
+            },
+            "missionPay": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5"
+            },
+            "supplies": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20"
+            },
+            "cacheEvery": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600"
+            },
+            "pickupM": {
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 500"
+            },
+            "freeHandout": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+            },
             "revealCooldownSecs": {
-              ".validate": "newData.isNumber() && newData.val() >= 30 && newData.val() <= 1800"
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 3600"
             },
             "revealRadius": {
-              ".validate": "newData.isNumber() && newData.val() >= 25 && newData.val() <= 500"
+              ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 2000"
+            },
+            "revealNotice": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
             },
             "darkSecs": {
               ".validate": "newData.isNumber() && newData.val() >= 20 && newData.val() <= 600"
             },
-            "powerups": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20"
-            },
-            "hidersSeeSeekers": {
+            "strictHolds": {
               ".validate": "newData.isBoolean()"
+            },
+            "pool": {
+              "$k": {
+                ".validate": "newData.isBoolean()"
+              }
             },
             "$other": {
               ".validate": false
@@ -80,7 +163,7 @@
         "players": {
           ".read": "auth != null",
           "$uid": {
-            ".write": "auth != null && ( ((root.child('games/' + $g).child('meta').child('status').val() == 'lobby') && auth.uid == root.child('games/' + $g).child('meta').child('host').val()) || (auth.uid == $uid && !newData.exists()) || (auth.uid == $uid && data.exists() && newData.exists() && newData.child('role').val() == data.child('role').val()) || ((root.child('games/' + $g).child('meta').child('status').val() == 'lobby') && auth.uid == $uid && !data.exists() && newData.child('role').val() == 'hider'))",
+            ".write": "auth != null && ( ((root.child('games/' + $g).child('meta').child('status').val() == 'lobby') && auth.uid == root.child('games/' + $g).child('meta').child('host').val()) || (auth.uid == $uid && !newData.exists()) || (auth.uid == $uid && data.exists() && newData.exists() && newData.child('role').val() == data.child('role').val()) || (auth.uid == $uid && !data.exists() && (((root.child('games/' + $g).child('meta').child('status').val() == 'lobby') && newData.child('role').val() == 'hider') || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && newData.child('role').val() == 'seeker'))))",
             ".validate": "newData.hasChildren(['name', 'role', 'color', 'joinedAt'])",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
@@ -99,10 +182,17 @@
             }
           }
         },
+        "seen": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && (root.child('games/' + $g).child('players/' + $uid).exists() || !newData.exists())",
+            ".validate": "newData.val() == now"
+          }
+        },
         "locs": {
           "$uid": {
-            ".read": "auth != null && ( auth.uid == $uid || (root.child('games/' + $g).child('players/' + auth.uid).exists() && ( (root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby') || ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists())) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now < (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) || root.child('games/' + $g).child('meta').child('settings/hidersSeeSeekers').val() == true || ((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists()) && (root.child('games/' + $g).child('fx/' + auth.uid + '/lookout').child('t').val() > now - 20000)))) || ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists()) && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())) || ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists()) && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && (root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && data.exists() && ( data.child('t').val() < now - root.child('games/' + $g).child('meta').child('settings/darkSecs').val() * 1000 || ((data.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) * ((data.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) + ((data.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((data.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) > root.child('games/' + $g).child('meta').child('area').child('r').val() * root.child('games/' + $g).child('meta').child('area').child('r').val() || (root.child('games/' + $g).child('reveal').exists() && root.child('games/' + $g).child('reveal/t').val() < now - 20000 && root.child('games/' + $g).child('circles/' + $uid + '/n').val() != root.child('games/' + $g).child('reveal/n').val() && !(root.child('games/' + $g).child('fx/' + $uid + '/cloak').child('t').val() > root.child('games/' + $g).child('reveal/t').val() - 180000)) || (root.child('games/' + $g).child('fx/' + auth.uid + '/tracker').child('target').val() == $uid && (root.child('games/' + $g).child('fx/' + auth.uid + '/tracker').child('t').val() > now - 15000)) || (root.child('games/' + $g).child('freeze').child('t').val() > now - 20000 && ((data.child('lat').val() - root.child('games/' + $g).child('freeze').child('lat').val()) * 111320) * ((data.child('lat').val() - root.child('games/' + $g).child('freeze').child('lat').val()) * 111320) + ((data.child('lng').val() - root.child('games/' + $g).child('freeze').child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((data.child('lng').val() - root.child('games/' + $g).child('freeze').child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) <= 5625))))))",
-            ".write": "auth != null && auth.uid == $uid && ((root.child('games/' + $g).child('players/' + $uid).exists() && root.child('games/' + $g).child('meta').child('status').val() != 'ended') || !newData.exists())",
+            ".read": "((auth != null && auth.uid == $uid) || (((auth != null) && (root.child('games/' + $g).child('players/' + auth.uid).exists()) && ((((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)))) || ((root.child('games/' + $g).child('meta').child('status').val() == 'lobby')) || ((((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && ((((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) || (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now < (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000))) || ((((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())) && ((root.child('games/' + $g).child('fx/' + auth.uid + '/spy').child('t').val() > now - 30000)))) || ((((root.child('games/' + $g).child('flare').child('t').val() + 10000 <= now && now < root.child('games/' + $g).child('flare').child('t').val() + 70000)) && ((root.child('games/' + $g).child('snap/' + $uid + '/t').val() != root.child('games/' + $g).child('flare').child('t').val())))))))) || ((((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && ((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())))) || ((((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) && ((root.child('games/' + $g).child('meta').child('status').val() == 'live')) && (now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) && (data.exists()) && (((data.child('t').val() < now - root.child('games/' + $g).child('meta').child('settings/darkSecs').val() * 1000) || (((data.child('out').exists()) && (data.child('out').val() < now - root.child('games/' + $g).child('meta').child('settings/graceSecs').val() * 1000))) || (((root.child('games/' + $g).child('meta').child('settings/campMins').val() > 0) && (data.child('camp/since').val() < now - (root.child('games/' + $g).child('meta').child('settings/campMins').val() * 60 + root.child('games/' + $g).child('meta').child('settings/graceSecs').val()) * 1000) && ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) < now - (root.child('games/' + $g).child('meta').child('settings/campMins').val() * 60 + root.child('games/' + $g).child('meta').child('settings/graceSecs').val()) * 1000))) || (((root.child('games/' + $g).child('reveal').exists()) && (root.child('games/' + $g).child('reveal/t').val() < now - 20000) && (root.child('games/' + $g).child('circles/' + $uid + '/n').val() != root.child('games/' + $g).child('reveal/n').val()))) || (root.child('games/' + $g).child('mfail').val() > now - 60000) || ((((root.child('games/' + $g).child('flare').child('t').val() + 10000 <= now && now < root.child('games/' + $g).child('flare').child('t').val() + 70000)) && ((root.child('games/' + $g).child('snap/' + $uid + '/t').val() != root.child('games/' + $g).child('flare').child('t').val())) && (!(root.child('games/' + $g).child('fx/' + $uid + '/smoke').child('t').val() > now - 60000)))))))))))))",
+            ".write": "auth != null && auth.uid == $uid && ( !newData.exists() || (root.child('games/' + $g).child('players/' + $uid).exists() && root.child('games/' + $g).child('meta').child('status').val() != 'ended' && (!(root.child('games/' + $g).child('meta').child('status').val() == 'live') || (((((((((newData.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) > ((root.child('games/' + $g).child('meta').child('area').child('r').val() * (1 - (100 - root.child('games/' + $g).child('meta').child('settings/shrinkPct').val()) / 100 * (now - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) / (((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000) - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000))))) * ((root.child('games/' + $g).child('meta').child('area').child('r').val() * (1 - (100 - root.child('games/' + $g).child('meta').child('settings/shrinkPct').val()) / 100 * (now - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) / (((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000) - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000))))))) && (((((data.child('out').exists()) && (newData.child('out').val() == data.child('out').val()))) || (((!data.child('out').exists()) && (newData.child('out').val() == now))))))) || (((!((((newData.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('meta').child('area').child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('meta').child('area').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) > ((root.child('games/' + $g).child('meta').child('area').child('r').val() * (1 - (100 - root.child('games/' + $g).child('meta').child('settings/shrinkPct').val()) / 100 * (now - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) / (((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000) - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000))))) * ((root.child('games/' + $g).child('meta').child('area').child('r').val() * (1 - (100 - root.child('games/' + $g).child('meta').child('settings/shrinkPct').val()) / 100 * (now - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000)) / (((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000) - (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000))))))) && (!newData.child('out').exists())))) && ((((data.child('camp').exists()) && ((((newData.child('lat').val() - data.child('camp').child('lat').val()) * 111320) * ((newData.child('lat').val() - data.child('camp').child('lat').val()) * 111320) + ((newData.child('lng').val() - data.child('camp').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - data.child('camp').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/campM').val()) * (root.child('games/' + $g).child('meta').child('settings/campM').val())) && (newData.child('camp/lat').val() == data.child('camp/lat').val()) && (newData.child('camp/lng').val() == data.child('camp/lng').val()) && (newData.child('camp/since').val() == data.child('camp/since').val()))) || (((newData.child('camp/lat').val() == newData.child('lat').val()) && (newData.child('camp/lng').val() == newData.child('lng').val()) && (newData.child('camp/since').val() == now) && (((!data.child('camp').exists()) || ((((newData.child('lat').val() - data.child('camp').child('lat').val()) * 111320) * ((newData.child('lat').val() - data.child('camp').child('lat').val()) * 111320) + ((newData.child('lng').val() - data.child('camp').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - data.child('camp').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) > (root.child('games/' + $g).child('meta').child('settings/campM').val()) * (root.child('games/' + $g).child('meta').child('settings/campM').val())))))))))))",
             ".validate": "newData.hasChildren(['lat', 'lng', 'acc', 't']) && newData.child('t').val() == now",
             "lat": {
               ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
@@ -116,6 +206,24 @@
             "t": {
               ".validate": "newData.isNumber()"
             },
+            "out": {
+              ".validate": "newData.isNumber()"
+            },
+            "camp": {
+              ".validate": "newData.hasChildren(['lat', 'lng', 'since'])",
+              "lat": {
+                ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+              },
+              "lng": {
+                ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+              },
+              "since": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
             "$other": {
               ".validate": false
             }
@@ -125,7 +233,7 @@
           ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
           ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
           "$h": {
-            ".write": "auth != null && ( (!data.exists() && newData.exists() && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && root.child('games/' + $g).child('players/' + $h).child('role').val() == 'hider' && newData.child('by').val() == auth.uid && newData.child('t').val() == now && ( (newData.child('how').val() == 'gps' && $h != auth.uid && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && (root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000) && (root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000) && root.child('games/' + $g).child('locs/' + auth.uid).child('acc').val() <= 30 && root.child('games/' + $g).child('locs/' + $h).child('acc').val() <= 30 && !(root.child('games/' + $g).child('fx/' + $h + '/shield').child('t').val() > now - 30000) && ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) <= root.child('games/' + $g).child('meta').child('settings/tagRadius').val() * root.child('games/' + $g).child('meta').child('settings/tagRadius').val()) || (newData.child('how').val() == 'self' && auth.uid == $h) || (newData.child('how').val() == 'host' && auth.uid == root.child('games/' + $g).child('meta').child('host').val()))) || (data.exists() && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val()))",
+            ".write": "auth != null && ( (!data.exists() && newData.exists() && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && root.child('games/' + $g).child('players/' + $h).child('role').val() == 'hider' && newData.child('by').val() == auth.uid && newData.child('t').val() == now && ( (newData.child('how').val() == 'gps' && $h != auth.uid && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && (root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000) && (root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000) && root.child('games/' + $g).child('locs/' + auth.uid).child('acc').val() <= 30 && root.child('games/' + $g).child('locs/' + $h).child('acc').val() <= 30 && (((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/tagRadius').val()) * (root.child('games/' + $g).child('meta').child('settings/tagRadius').val())) || ((newData.child('how').val() == 'self' || newData.child('how').val() == 'out' || newData.child('how').val() == 'quit') && auth.uid == $h) || (newData.child('how').val() == 'host' && auth.uid == root.child('games/' + $g).child('meta').child('host').val()))) || (data.exists() && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val()))",
             ".validate": "newData.hasChildren(['by', 't', 'how'])",
             "by": {
               ".validate": "newData.isString()"
@@ -134,10 +242,10 @@
               ".validate": "newData.isNumber()"
             },
             "how": {
-              ".validate": "newData.val() == 'gps' || newData.val() == 'self' || newData.val() == 'host'"
+              ".validate": "((newData.val() == 'gps') || (newData.val() == 'self') || (newData.val() == 'host') || (newData.val() == 'out') || (newData.val() == 'quit'))"
             },
-            "d": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+            "why": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
             },
             "$other": {
               ".validate": false
@@ -146,7 +254,7 @@
         },
         "reveal": {
           ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
-          ".write": "auth != null && ( (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && newData.child('by').val() == auth.uid && newData.child('t').val() == now && ((!data.exists() && newData.child('n').val() == 1 && (now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000 || newData.child('boost').exists())) || (data.exists() && newData.child('n').val() == data.child('n').val() + 1 && (now >= data.child('t').val() + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000 || newData.child('boost').exists()))) && (!newData.child('boost').exists() || (root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('c/by').val() == auth.uid && !root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('u').exists() && newData.parent().child('drops/' + newData.child('boost').val() + '/u').val() == now && ((root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('c/as').val() == 'hider' && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists()) && root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('h').val() == 'reveal') || (root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('c/as').val() == 'seeker' && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && root.child('games/' + $g).child('drops/' + newData.child('boost').val()).child('s').val() == 'reveal'))))) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".write": "((((((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (!newData.parent().child('rcut').exists()) && (((((!data.exists()) && (newData.child('n').val() == 1) && (((now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000) || (((root.child('games/' + $g).child('rcut').exists()) && (now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000 - root.child('games/' + $g).child('rcut').child('ms').val()))))))) || (((data.exists()) && (newData.child('n').val() == data.child('n').val() + 1) && (((now >= data.child('t').val() + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000) || (((root.child('games/' + $g).child('rcut').exists()) && (now >= data.child('t').val() + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 1000 - root.child('games/' + $g).child('rcut').child('ms').val()))))))))))) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
           ".validate": "newData.hasChildren(['n', 't', 'by'])",
           "n": {
             ".validate": "newData.isNumber()"
@@ -157,7 +265,18 @@
           "by": {
             ".validate": "newData.isString()"
           },
-          "boost": {
+          "$other": {
+            ".validate": false
+          }
+        },
+        "rcut": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "((((((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('u').exists()) && (newData.parent().child('bag/' + auth.uid + '/' + newData.child('item').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('k').val() == 'reveal_ready'))) && (true))) && (((((!data.exists()) && (newData.child('ms').val() == root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 500))) || (((data.exists()) && (newData.child('ms').val() == data.child('ms').val() + root.child('games/' + $g).child('meta').child('settings/revealCooldownSecs').val() * 500))))))) || (((!newData.exists()) && (newData.parent().child('reveal/t').val() == now))) || (auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.hasChildren(['ms', 'item'])",
+          "ms": {
+            ".validate": "newData.isNumber()"
+          },
+          "item": {
             ".validate": "newData.isString()"
           },
           "$other": {
@@ -168,9 +287,12 @@
           ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
           ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
           "$h": {
-            ".write": "auth != null && ( (auth.uid == $h && (root.child('games/' + $g).child('players/' + $h).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $h).exists()) && (root.child('games/' + $g).child('meta').child('status').val() == 'live') && root.child('games/' + $g).child('reveal').exists() && newData.child('n').val() == root.child('games/' + $g).child('reveal/n').val() && data.child('n').val() != newData.child('n').val() && newData.child('t').val() == now && newData.child('r').val() == root.child('games/' + $g).child('meta').child('settings/revealRadius').val() && (root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000) && ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) <= root.child('games/' + $g).child('meta').child('settings/revealRadius').val() * root.child('games/' + $g).child('meta').child('settings/revealRadius').val()) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
-            ".validate": "newData.hasChildren(['n', 'lat', 'lng', 'r', 't'])",
+            ".write": "((((auth != null) && (auth.uid == $h) && ((root.child('games/' + $g).child('players/' + $h).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $h).exists())) && ((root.child('games/' + $g).child('meta').child('status').val() == 'live')) && (root.child('games/' + $g).child('reveal').exists()) && (newData.child('n').val() == root.child('games/' + $g).child('reveal/n').val()) && (data.child('n').val() != newData.child('n').val()) && (newData.child('t').val() == now) && (((((!newData.child('skip').exists()) && (!newData.child('jam').exists()) && (!newData.child('mis').exists()) && (newData.child('r').val() == root.child('games/' + $g).child('meta').child('settings/revealRadius').val()) && ((root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000)) && ((((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/revealRadius').val()) * (root.child('games/' + $g).child('meta').child('settings/revealRadius').val())))) || (((newData.child('skip').val() == 'smoke') && ((root.child('games/' + $g).child('fx/' + $h + '/smoke').child('t').val() > now - 60000)))) || (((newData.child('skip').val() == 'silence') && ((root.child('games/' + $g).child('fx/' + $h + '/silence').child('t').val() > now - 120000)))) || (((newData.child('skip').val() == 'jam') && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('jam').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('jam').val()).child('u').exists()) && (newData.parent().parent().child('bag/' + auth.uid + '/' + newData.child('jam').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('jam').val()).child('k').val() == 'jamming'))) && (root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('jam').val()).child('a').exists()))))) || (((!newData.child('skip').exists()) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).child('u').exists()) && (newData.parent().parent().child('bag/' + auth.uid + '/' + newData.child('mis').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).child('k').val() == 'misdirection'))) && (root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).child('a').exists()))) && (newData.child('r').val() == root.child('games/' + $g).child('meta').child('settings/revealRadius').val()) && ((root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000)) && ((((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $h).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $h).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).child('m').val() + root.child('games/' + $g).child('meta').child('settings/revealRadius').val()) * (root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('mis').val()).child('m').val() + root.child('games/' + $g).child('meta').child('settings/revealRadius').val())))))))) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+            ".validate": "newData.hasChildren(['n', 't'])",
             "n": {
+              ".validate": "newData.isNumber()"
+            },
+            "t": {
               ".validate": "newData.isNumber()"
             },
             "lat": {
@@ -182,7 +304,73 @@
             "r": {
               ".validate": "newData.isNumber()"
             },
+            "skip": {
+              ".validate": "newData.isString()"
+            },
+            "jam": {
+              ".validate": "newData.isString()"
+            },
+            "mis": {
+              ".validate": "newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "freeze": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "((((((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) && ((root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000)) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (!newData.parent().child('fcut').exists()) && (((((!data.exists()) && (newData.child('n').val() == 1) && (((now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 1000) || (((root.child('games/' + $g).child('fcut').exists()) && (now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 1000 - root.child('games/' + $g).child('fcut').child('ms').val()))))))) || (((data.exists()) && (newData.child('n').val() == data.child('n').val() + 1) && (((now >= data.child('t').val() + (root.child('games/' + $g).child('meta').child('settings/coverSecs').val() + root.child('games/' + $g).child('meta').child('settings/holdSecs').val()) * 1000 + root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 1000) || (((root.child('games/' + $g).child('fcut').exists()) && (now >= data.child('t').val() + (root.child('games/' + $g).child('meta').child('settings/coverSecs').val() + root.child('games/' + $g).child('meta').child('settings/holdSecs').val()) * 1000 + root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 1000 - root.child('games/' + $g).child('fcut').child('ms').val()))))))))))) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.hasChildren(['n', 't', 'by'])",
+          "n": {
+            ".validate": "newData.isNumber()"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "by": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "fcut": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "((((((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('u').exists()) && (newData.parent().child('bag/' + auth.uid + '/' + newData.child('item').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('k').val() == 'freeze_ready'))) && (true))) && (((((!data.exists()) && (newData.child('ms').val() == root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 500))) || (((data.exists()) && (newData.child('ms').val() == data.child('ms').val() + root.child('games/' + $g).child('meta').child('settings/freezeCd').val() * 500))))))) || (((!newData.exists()) && (newData.parent().child('freeze/t').val() == now))) || (auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.hasChildren(['ms', 'item'])",
+          "ms": {
+            ".validate": "newData.isNumber()"
+          },
+          "item": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "fz": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
+          "$h": {
+            ".write": "((((auth != null) && (auth.uid == $h) && ((root.child('games/' + $g).child('players/' + $h).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $h).exists())) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && (root.child('games/' + $g).child('freeze').exists()) && (newData.child('n').val() == root.child('games/' + $g).child('freeze/n').val()) && (data.child('n').val() != newData.child('n').val()) && (newData.child('t').val() == now) && (now <= root.child('games/' + $g).child('freeze/t').val() + root.child('games/' + $g).child('meta').child('settings/coverSecs').val() * 1000 + 5000) && ((root.child('games/' + $g).child('players/' + newData.child('by').val()).exists() && (root.child('games/' + $g).child('players/' + newData.child('by').val()).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + newData.child('by').val()).exists()))) && ((root.child('games/' + $g).child('locs/' + $h).exists() && root.child('games/' + $g).child('locs/' + $h).child('t').val() >= now - 12000)) && (root.child('games/' + $g).child('locs/' + newData.child('by').val()).child('t').val() >= now - 30000) && ((((root.child('games/' + $g).child('locs/' + $h).child('lat').val() - root.child('games/' + $g).child('locs/' + newData.child('by').val()).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $h).child('lat').val() - root.child('games/' + $g).child('locs/' + newData.child('by').val()).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $h).child('lng').val() - root.child('games/' + $g).child('locs/' + newData.child('by').val()).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $h).child('lng').val() - root.child('games/' + $g).child('locs/' + newData.child('by').val()).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/freezeM').val()) * (root.child('games/' + $g).child('meta').child('settings/freezeM').val())) && (((!newData.child('ward').exists()) || (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('ward').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('ward').val()).child('u').exists()) && (newData.parent().parent().child('bag/' + auth.uid + '/' + newData.child('ward').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('ward').val()).child('k').val() == 'ward'))) && (root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('ward').val()).child('a').exists()))))))) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+            ".validate": "newData.hasChildren(['n', 't', 'by'])",
+            "n": {
+              ".validate": "newData.isNumber()"
+            },
             "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "by": {
+              ".validate": "newData.isString()"
+            },
+            "ward": {
+              ".validate": "newData.isString()"
+            },
+            "broke": {
+              ".validate": "newData.isNumber()"
+            },
+            "out": {
               ".validate": "newData.isNumber()"
             },
             "$other": {
@@ -190,39 +378,18 @@
             }
           }
         },
-        "seen": {
-          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
-          "$uid": {
-            ".write": "auth != null && auth.uid == $uid && (root.child('games/' + $g).child('players/' + $uid).exists() || !newData.exists())",
-            ".validate": "newData.val() == now"
-          }
-        },
-        "drops": {
+        "prints": {
           ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
           ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
-          "$id": {
-            ".write": "auth != null && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && !data.exists() && newData.exists() && ((root.child('games/' + $g).child('meta').child('status').val() == 'lobby') || (root.child('games/' + $g).child('meta').child('status').val() == 'live'))",
-            ".validate": "$id.length >= 6 && $id.length <= 12 && newData.hasChildren(['lat', 'lng', 'h', 's'])",
-            "lat": {
-              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
-            },
-            "lng": {
-              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
-            },
-            "h": {
-              ".validate": "newData.val() == 'lookout' || newData.val() == 'shield' || newData.val() == 'cloak'"
-            },
-            "s": {
-              ".validate": "newData.val() == 'reveal' || newData.val() == 'tracker' || newData.val() == 'freeze'"
-            },
-            "c": {
-              ".write": "auth != null && !data.exists() && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && newData.child('by').val() == auth.uid && newData.child('t').val() == now && ((newData.child('as').val() == 'hider' && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())) || (newData.child('as').val() == 'seeker' && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())))) && (root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000) && root.child('games/' + $g).child('locs/' + auth.uid).child('acc').val() <= 30 && ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('drops/' + $id).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('drops/' + $id).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('drops/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('drops/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) <= 225",
-              ".validate": "newData.hasChildren(['by', 'as', 't'])",
-              "by": {
-                ".validate": "newData.isString()"
+          "$uid": {
+            "$k": {
+              ".write": "auth != null && auth.uid == $uid && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists()) && (root.child('games/' + $g).child('meta').child('status').val() == 'live') && !data.exists()",
+              ".validate": "newData.hasChildren(['lat', 'lng', 't']) && newData.child('t').val() == now",
+              "lat": {
+                ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
               },
-              "as": {
-                ".validate": "newData.val() == 'hider' || newData.val() == 'seeker'"
+              "lng": {
+                ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
               },
               "t": {
                 ".validate": "newData.isNumber()"
@@ -230,13 +397,87 @@
               "$other": {
                 ".validate": false
               }
-            },
-            "u": {
-              ".write": "auth != null && !data.exists() && newData.val() == now && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && root.child('games/' + $g).child('drops/' + $id).child('c/by').val() == auth.uid && ((newData.parent().parent().parent().child('fx/' + auth.uid + '/lookout/drop').val() == $id && newData.parent().parent().parent().child('fx/' + auth.uid + '/lookout/t').val() == now) || (newData.parent().parent().parent().child('fx/' + auth.uid + '/shield/drop').val() == $id && newData.parent().parent().parent().child('fx/' + auth.uid + '/shield/t').val() == now) || (newData.parent().parent().parent().child('fx/' + auth.uid + '/cloak/drop').val() == $id && newData.parent().parent().parent().child('fx/' + auth.uid + '/cloak/t').val() == now) || (newData.parent().parent().parent().child('fx/' + auth.uid + '/tracker/drop').val() == $id && newData.parent().parent().parent().child('fx/' + auth.uid + '/tracker/t').val() == now) || (newData.parent().parent().parent().child('freeze/drop').val() == $id && newData.parent().parent().parent().child('freeze/t').val() == now) || (newData.parent().parent().parent().child('reveal/boost').val() == $id && newData.parent().parent().parent().child('reveal/t').val() == now))",
-              ".validate": "newData.isNumber()"
-            },
-            "$other": {
-              ".validate": false
+            }
+          }
+        },
+        "caches": {
+          ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
+          "h": {
+            ".read": "auth != null && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())",
+            "$c": {
+              ".write": "auth != null && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && (root.child('games/' + $g).child('meta').child('status').val() == 'live') && !data.exists() && newData.exists()",
+              ".validate": "newData.hasChildren(['lat', 'lng', 'k', 't'])",
+              "lat": {
+                ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+              },
+              "lng": {
+                ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+              },
+              "t": {
+                ".validate": "newData.isNumber()"
+              },
+              "k": {
+                ".validate": "((newData.val() == 'ghost') || (newData.val() == 'ward') || (newData.val() == 'spy') || (newData.val() == 'decoy') || (newData.val() == 'smoke') || (newData.val() == 'silence') || (newData.val() == 'jamming') || (newData.val() == 'misdirection') || (newData.val() == 'flare') || (newData.val() == 'scan'))"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "s": {
+            ".read": "auth != null && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))",
+            "$c": {
+              ".write": "auth != null && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && (root.child('games/' + $g).child('meta').child('status').val() == 'live') && !data.exists() && newData.exists()",
+              ".validate": "newData.hasChildren(['lat', 'lng', 'k', 't'])",
+              "lat": {
+                ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+              },
+              "lng": {
+                ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+              },
+              "t": {
+                ".validate": "newData.isNumber()"
+              },
+              "k": {
+                ".validate": "((newData.val() == 'reveal_ready') || (newData.val() == 'freeze_ready') || (newData.val() == 'flare') || (newData.val() == 'scan'))"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+        "bag": {
+          ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
+          "$uid": {
+            ".read": "auth != null && auth.uid == $uid",
+            "$id": {
+              ".write": "auth != null && auth.uid == $uid && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && !data.exists() && newData.exists() && newData.child('t').val() == now && !newData.child('a').exists() && !newData.child('u').exists() && ((((newData.child('src').val() == 'cache') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (root.child('games/' + $g).child('caches/h/' + $id).exists()) && (newData.child('k').val() == root.child('games/' + $g).child('caches/h/' + $id + '/k').val()) && ((root.child('games/' + $g).child('locs/' + $uid).exists() && root.child('games/' + $g).child('locs/' + $uid).child('t').val() >= now - 12000)) && (root.child('games/' + $g).child('locs/' + $uid).child('acc').val() <= 30) && ((((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('caches/h/' + $id).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('caches/h/' + $id).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('caches/h/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('caches/h/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/pickupM').val()) * (root.child('games/' + $g).child('meta').child('settings/pickupM').val())))) || (((newData.child('src').val() == 'cache') && ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && (root.child('games/' + $g).child('caches/s/' + $id).exists()) && (newData.child('k').val() == root.child('games/' + $g).child('caches/s/' + $id + '/k').val()) && ((root.child('games/' + $g).child('locs/' + $uid).exists() && root.child('games/' + $g).child('locs/' + $uid).child('t').val() >= now - 12000)) && (root.child('games/' + $g).child('locs/' + $uid).child('acc').val() <= 30) && ((((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('caches/s/' + $id).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('caches/s/' + $id).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('caches/s/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('caches/s/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('meta').child('settings/pickupM').val()) * (root.child('games/' + $g).child('meta').child('settings/pickupM').val())))) || (((newData.child('src').val() == 'free') && (((($id == 'free1' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 1)) || (($id == 'free2' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 2)) || (($id == 'free3' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 3)) || (($id == 'free4' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 4)) || (($id == 'free5' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 5)) || (($id == 'free6' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 6)) || (($id == 'free7' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 7)) || (($id == 'free8' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 8)) || (($id == 'free9' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 9)) || (($id == 'free10' && root.child('games/' + $g).child('meta').child('settings/freeHandout').val() >= 10)))) && ((((((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (((newData.child('k').val() == 'ghost') || (newData.child('k').val() == 'ward') || (newData.child('k').val() == 'spy') || (newData.child('k').val() == 'decoy') || (newData.child('k').val() == 'smoke') || (newData.child('k').val() == 'silence') || (newData.child('k').val() == 'jamming') || (newData.child('k').val() == 'misdirection') || (newData.child('k').val() == 'flare') || (newData.child('k').val() == 'scan'))))) || ((((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && (((newData.child('k').val() == 'reveal_ready') || (newData.child('k').val() == 'freeze_ready') || (newData.child('k').val() == 'flare') || (newData.child('k').val() == 'scan'))))))))) || (((newData.child('src').val() == 'mission') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (root.child('games/' + $g).child('mission').child('done').exists()) && (((newData.child('k').val() == 'ghost') || (newData.child('k').val() == 'ward') || (newData.child('k').val() == 'spy') || (newData.child('k').val() == 'decoy') || (newData.child('k').val() == 'smoke') || (newData.child('k').val() == 'silence') || (newData.child('k').val() == 'jamming') || (newData.child('k').val() == 'misdirection') || (newData.child('k').val() == 'flare') || (newData.child('k').val() == 'scan'))) && (((($id == 'm' + root.child('games/' + $g).child('mission').child('id').val() + '1' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 1)) || (($id == 'm' + root.child('games/' + $g).child('mission').child('id').val() + '2' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 2)) || (($id == 'm' + root.child('games/' + $g).child('mission').child('id').val() + '3' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 3)) || (($id == 'm' + root.child('games/' + $g).child('mission').child('id').val() + '4' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 4)) || (($id == 'm' + root.child('games/' + $g).child('mission').child('id').val() + '5' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 5)))))) || (((newData.child('src').val() == 'fail') && ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && (root.child('games/' + $g).child('mission').child('fail').exists()) && (((newData.child('k').val() == 'reveal_ready') || (newData.child('k').val() == 'freeze_ready') || (newData.child('k').val() == 'flare') || (newData.child('k').val() == 'scan'))) && (((($id == 'f' + root.child('games/' + $g).child('mission').child('id').val() + '1' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 1)) || (($id == 'f' + root.child('games/' + $g).child('mission').child('id').val() + '2' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 2)) || (($id == 'f' + root.child('games/' + $g).child('mission').child('id').val() + '3' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 3)) || (($id == 'f' + root.child('games/' + $g).child('mission').child('id').val() + '4' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 4)) || (($id == 'f' + root.child('games/' + $g).child('mission').child('id').val() + '5' && root.child('games/' + $g).child('meta').child('settings/missionPay').val() >= 5)))))))",
+              ".validate": "newData.hasChildren(['k', 'src', 't'])",
+              "k": {
+                ".validate": "((newData.val() == 'ghost') || (newData.val() == 'ward') || (newData.val() == 'spy') || (newData.val() == 'decoy') || (newData.val() == 'smoke') || (newData.val() == 'silence') || (newData.val() == 'jamming') || (newData.val() == 'misdirection') || (newData.val() == 'flare') || (newData.val() == 'scan') || (newData.val() == 'reveal_ready') || (newData.val() == 'freeze_ready'))"
+              },
+              "src": {
+                ".validate": "((newData.val() == 'cache') || (newData.val() == 'free') || (newData.val() == 'mission') || (newData.val() == 'fail'))"
+              },
+              "t": {
+                ".validate": "newData.isNumber()"
+              },
+              "a": {
+                ".write": "((auth != null) && (auth.uid == $uid) && (!data.exists()) && (newData.val() == now) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).exists()) && (!root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('u').exists()) && (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'ward') || (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'jamming') || (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'misdirection'))) && (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() != 'misdirection') || (((newData.parent().child('m').val() == 50) || (newData.parent().child('m').val() == 100) || (newData.parent().child('m').val() == 200))))))",
+                ".validate": "newData.isNumber()"
+              },
+              "m": {
+                ".write": "((auth != null) && (auth.uid == $uid) && (!data.exists()) && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'misdirection') && (newData.parent().child('a').val() == now))",
+                ".validate": "((newData.val() == 50) || (newData.val() == 100) || (newData.val() == 200))"
+              },
+              "u": {
+                ".write": "((auth != null) && (auth.uid == $uid) && (!data.exists()) && (newData.val() == now) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).exists()) && (((((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'ghost') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/ghost/item').val() == $id) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/ghost/t').val() == now))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'spy') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/spy/item').val() == $id) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/spy/t').val() == now))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'smoke') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/smoke/item').val() == $id) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/smoke/t').val() == now))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'silence') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/silence/item').val() == $id) && (newData.parent().parent().parent().parent().child('fx/' + $uid + '/silence/t').val() == now))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'decoy') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'reveal_ready') && ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && (newData.parent().parent().parent().parent().child('rcut/item').val() == $id))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'freeze_ready') && ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))) && (newData.parent().parent().parent().parent().child('fcut/item').val() == $id))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'flare') && (newData.parent().parent().parent().parent().child('flare/item').val() == $id) && (newData.parent().parent().parent().parent().child('flare/t').val() == now))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'scan') && (newData.parent().parent().parent().parent().child('scan/' + $id + '/by').val() == $uid))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'ward') && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('a').exists()) && (newData.parent().parent().parent().parent().child('fz/' + $uid + '/ward').val() == $id))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'jamming') && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('a').exists()) && (newData.parent().parent().parent().parent().child('circles/' + $uid + '/jam').val() == $id))) || (((root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('k').val() == 'misdirection') && (root.child('games/' + $g).child('bag/' + $uid + '/' + $id).child('a').exists()) && (newData.parent().parent().parent().parent().child('circles/' + $uid + '/mis').val() == $id))))))",
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
             }
           }
         },
@@ -245,15 +486,12 @@
           ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
           "$uid": {
             "$kind": {
-              ".write": "auth != null && auth.uid == $uid && ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && newData.child('t').val() == now && (root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/by').val() == auth.uid && !root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('u').exists() && newData.parent().parent().parent().child('drops/' + newData.child('drop').val() + '/u').val() == now && ((root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/as').val() == 'hider' && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists()) && root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('h').val() == $kind) || (root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/as').val() == 'seeker' && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('s').val() == $kind))) && ($kind != 'tracker' || (root.child('games/' + $g).child('players/' + newData.child('target').val()).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + newData.child('target').val()).exists()))",
-              ".validate": "($kind == 'lookout' || $kind == 'shield' || $kind == 'cloak' || $kind == 'tracker') && newData.hasChildren(['t', 'drop'])",
+              ".write": "((auth != null) && (auth.uid == $uid) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (newData.child('t').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('u').exists()) && (newData.parent().parent().parent().child('bag/' + auth.uid + '/' + newData.child('item').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('k').val() == $kind))) && (true))) && ((($kind == 'ghost') || ($kind == 'spy') || ($kind == 'smoke') || ($kind == 'silence'))))",
+              ".validate": "newData.hasChildren(['t', 'item'])",
               "t": {
                 ".validate": "newData.isNumber()"
               },
-              "drop": {
-                ".validate": "newData.isString()"
-              },
-              "target": {
+              "item": {
                 ".validate": "newData.isString()"
               },
               "$other": {
@@ -262,27 +500,168 @@
             }
           }
         },
-        "freeze": {
+        "flare": {
           ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
-          ".write": "auth != null && ( (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000)) && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && newData.child('by').val() == auth.uid && newData.child('t').val() == now && (root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/by').val() == auth.uid && !root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('u').exists() && newData.parent().child('drops/' + newData.child('drop').val() + '/u').val() == now && ((root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/as').val() == 'hider' && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists()) && root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('h').val() == 'freeze') || (root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('c/as').val() == 'seeker' && (root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists())) && root.child('games/' + $g).child('drops/' + newData.child('drop').val()).child('s').val() == 'freeze'))) && (root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000) && ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area/mlon').val()) <= 625) || (!newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
-          ".validate": "newData.hasChildren(['lat', 'lng', 't', 'by', 'drop'])",
-          "lat": {
-            ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
-          },
-          "lng": {
-            ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
-          },
+          ".write": "((((((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && (root.child('games/' + $g).child('players/' + auth.uid).exists()) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).exists()) && (!root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('u').exists()) && (newData.parent().child('bag/' + auth.uid + '/' + newData.child('item').val() + '/u').val() == now) && (((root.child('games/' + $g).child('bag/' + auth.uid + '/' + newData.child('item').val()).child('k').val() == 'flare'))) && (true))))) || (auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.hasChildren(['t', 'by', 'item'])",
           "t": {
             ".validate": "newData.isNumber()"
           },
           "by": {
             ".validate": "newData.isString()"
           },
-          "drop": {
+          "item": {
             ".validate": "newData.isString()"
           },
           "$other": {
             ".validate": false
+          }
+        },
+        "snap": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists() && root.child('games/' + $g).child('flare').child('t').val() + 10000 <= now",
+          ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
+          "$uid": {
+            ".write": "((auth != null) && (auth.uid == $uid) && ((root.child('games/' + $g).child('meta').child('status').val() == 'live')) && (root.child('games/' + $g).child('players/' + $uid).exists()) && (newData.child('t').val() == root.child('games/' + $g).child('flare').child('t').val()) && (now <= root.child('games/' + $g).child('flare').child('t').val() + 10000) && ((root.child('games/' + $g).child('locs/' + $uid).exists() && root.child('games/' + $g).child('locs/' + $uid).child('t').val() >= now - 12000)) && ((((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $uid).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + $uid).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + $uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= 625))",
+            ".validate": "newData.hasChildren(['lat', 'lng', 't'])",
+            "lat": {
+              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+            },
+            "lng": {
+              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "scan": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))",
+          "$id": {
+            ".write": "((auth != null) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && (!data.exists()) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (((newData.child('r').val() == 50) || (newData.child('r').val() == 100) || (newData.child('r').val() == 200))) && (((((newData.child('side').val() == 'h') && ((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())))) || (((newData.child('side').val() == 's') && ((root.child('games/' + $g).child('players/' + auth.uid).exists() && (root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + auth.uid).exists()))))))) && ((root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000)) && ((((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val()) * 111320) * ((newData.child('lat').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val()) * 111320) + ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((newData.child('lng').val() - root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= 625) && (root.child('games/' + $g).child('bag/' + auth.uid + '/' + $id + '/k').val() == 'scan') && (newData.parent().parent().child('bag/' + auth.uid + '/' + $id + '/u').val() == now))",
+            ".validate": "newData.hasChildren(['by', 't', 'r', 'side', 'lat', 'lng'])",
+            "by": {
+              ".validate": "newData.isString()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "r": {
+              ".validate": "newData.isNumber()"
+            },
+            "side": {
+              ".validate": "newData.isString()"
+            },
+            "lat": {
+              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+            },
+            "lng": {
+              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+            },
+            "a": {
+              "$uid": {
+                ".write": "((auth != null) && (auth.uid == $uid) && (!data.exists()) && (now <= root.child('games/' + $g).child('scan/' + $id + '/t').val() + 30000) && (((((root.child('games/' + $g).child('scan/' + $id + '/side').val() == 'h') && ((root.child('games/' + $g).child('players/' + $uid).exists() && (root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'seeker' || root.child('games/' + $g).child('caught/' + $uid).exists()))))) || (((root.child('games/' + $g).child('scan/' + $id + '/side').val() == 's') && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())))))) && (((((newData.val() == false) && ((root.child('games/' + $g).child('fx/' + $uid + '/smoke').child('t').val() > now - 60000)))) || ((((root.child('games/' + $g).child('locs/' + $uid).exists() && root.child('games/' + $g).child('locs/' + $uid).child('t').val() >= now - 12000)) && (newData.val() == ((((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('scan/' + $id).child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('scan/' + $id).child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('scan/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('scan/' + $id).child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('scan/' + $id + '/r').val()) * (root.child('games/' + $g).child('scan/' + $id + '/r').val()))))))))",
+                ".validate": "newData.isBoolean()"
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "mission": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "((((auth != null) && (auth.uid == root.child('games/' + $g).child('meta').child('host').val()) && ((root.child('games/' + $g).child('meta').child('status').val() == 'live')) && (newData.exists()) && (((!data.exists()) || (data.child('done').exists()) || (data.child('fail').exists()))) && (newData.child('id').val() != data.child('id').val()) && (newData.child('t').val() == now) && (newData.child('r').val() == root.child('games/' + $g).child('meta').child('settings/missionM').val()) && (!newData.child('done').exists()) && (!newData.child('fail').exists()) && (!newData.child('first').exists()))) || (auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.hasChildren(['id', 'a', 'b', 'r', 't'])",
+          "id": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "r": {
+            ".validate": "newData.isNumber()"
+          },
+          "a": {
+            "lat": {
+              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+            },
+            "lng": {
+              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "b": {
+            "lat": {
+              ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+            },
+            "lng": {
+              ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "first": {
+            ".write": "((auth != null) && (!data.exists()) && ((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (now <= (root.child('games/' + $g).child('mission').child('t').val() + root.child('games/' + $g).child('meta').child('settings/missionStart').val() * 1000)) && (newData.parent().parent().child('mhold/' + auth.uid + '/w').val() == root.child('games/' + $g).child('mission').child('id').val()))",
+            "by": {
+              ".validate": "newData.isString()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "done": {
+            ".write": "((auth != null) && (!data.exists()) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + auth.uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + auth.uid).exists())) && (!root.child('games/' + $g).child('mission').child('fail').exists()) && (newData.child('by').val() == auth.uid) && (newData.child('t').val() == now) && (root.child('games/' + $g).child('mhold/' + auth.uid + '/w').val() == root.child('games/' + $g).child('mission').child('id').val()) && (root.child('games/' + $g).child('mhold/' + auth.uid + '/since').val() <= now - root.child('games/' + $g).child('meta').child('settings/missionHold').val() * 1000) && ((root.child('games/' + $g).child('locs/' + auth.uid).exists() && root.child('games/' + $g).child('locs/' + auth.uid).child('t').val() >= now - 12000)) && (((((root.child('games/' + $g).child('mhold/' + auth.uid + '/c').val() == 'a') && ((((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('mission').child('a').child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('mission').child('a').child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('mission').child('a').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('mission').child('a').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('mission').child('r').val()) * (root.child('games/' + $g).child('mission').child('r').val())))) || (((root.child('games/' + $g).child('mhold/' + auth.uid + '/c').val() == 'b') && ((((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('mission').child('b').child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lat').val() - root.child('games/' + $g).child('mission').child('b').child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('mission').child('b').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + auth.uid).child('lng').val() - root.child('games/' + $g).child('mission').child('b').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('mission').child('r').val()) * (root.child('games/' + $g).child('mission').child('r').val())))))))",
+            "by": {
+              ".validate": "newData.isString()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "fail": {
+            ".write": "((auth != null) && (!data.exists()) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && (root.child('games/' + $g).child('players/' + auth.uid).exists()) && (newData.val() == now) && (!root.child('games/' + $g).child('mission').child('done').exists()) && (now > (root.child('games/' + $g).child('mission').child('t').val() + root.child('games/' + $g).child('meta').child('settings/missionStart').val() * 1000)) && (((!root.child('games/' + $g).child('mission').child('first').exists()) || (!newData.parent().parent().child('mhold').exists()))) && (newData.parent().parent().child('mfail').val() == now))",
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "mfail": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "((((auth != null) && (newData.val() == now) && (newData.parent().child('mission/fail').val() == now))) || (auth != null && !newData.exists() && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && ((root.child('games/' + $g).child('meta').child('status').val() == 'ended' || ((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) || (root.child('games/' + $g).child('meta').child('status').val() == 'lobby'))))",
+          ".validate": "newData.isNumber()"
+        },
+        "mhold": {
+          ".read": "auth != null && root.child('games/' + $g).child('players/' + auth.uid).exists()",
+          ".write": "auth != null && auth.uid == root.child('games/' + $g).child('meta').child('host').val() && !newData.exists()",
+          "$uid": {
+            ".write": "((((auth != null) && (auth.uid == $uid) && (!newData.exists()))) || (((auth != null) && (auth.uid == $uid) && (((root.child('games/' + $g).child('meta').child('status').val() == 'live') && now >= (root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) && now < ((root.child('games/' + $g).child('meta').child('startAt').val() + root.child('games/' + $g).child('meta').child('settings/hideSecs').val() * 1000) + root.child('games/' + $g).child('meta').child('settings/gameMins').val() * 60000))) && ((root.child('games/' + $g).child('players/' + $uid).child('role').val() == 'hider' && !root.child('games/' + $g).child('caught/' + $uid).exists())) && (root.child('games/' + $g).child('mission').exists()) && (!root.child('games/' + $g).child('mission').child('done').exists()) && (!root.child('games/' + $g).child('mission').child('fail').exists()) && (newData.child('w').val() == root.child('games/' + $g).child('mission').child('id').val()) && (newData.child('since').val() == now) && ((root.child('games/' + $g).child('locs/' + $uid).exists() && root.child('games/' + $g).child('locs/' + $uid).child('t').val() >= now - 12000)) && (((((newData.child('c').val() == 'a') && ((((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('mission').child('a').child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('mission').child('a').child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('mission').child('a').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('mission').child('a').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('mission').child('r').val()) * (root.child('games/' + $g).child('mission').child('r').val())))) || (((newData.child('c').val() == 'b') && ((((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('mission').child('b').child('lat').val()) * 111320) * ((root.child('games/' + $g).child('locs/' + $uid).child('lat').val() - root.child('games/' + $g).child('mission').child('b').child('lat').val()) * 111320) + ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('mission').child('b').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val()) * ((root.child('games/' + $g).child('locs/' + $uid).child('lng').val() - root.child('games/' + $g).child('mission').child('b').child('lng').val()) * root.child('games/' + $g).child('meta').child('area').child('mlon').val())) <= (root.child('games/' + $g).child('mission').child('r').val()) * (root.child('games/' + $g).child('mission').child('r').val())))))))))",
+            ".validate": "newData.hasChildren(['w', 'c', 'since'])",
+            "w": {
+              ".validate": "newData.isString()"
+            },
+            "since": {
+              ".validate": "newData.isNumber()"
+            },
+            "c": {
+              ".validate": "newData.val() == 'a' || newData.val() == 'b'"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "$other": {

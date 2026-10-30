@@ -3,7 +3,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const v = Date.now().toString(36);
 const root = new URL('..', import.meta.url).pathname;
-const files = ['index.html', 'js/app.js', 'js/fb.js'];
+import { readdirSync } from 'node:fs';
+const files = ['index.html', ...readdirSync(root + 'js').filter((f) => f.endsWith('.js')).map((f) => 'js/' + f)];
 for (const f of files) {
   const p = root + f;
   const s = readFileSync(p, 'utf8')

@@ -1,143 +1,25 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvusup4b';
-import { GameMap, loadEngine, MAP_STYLES } from './map.js?v=mvusup4b';
+// Boot, home, lobby, session plumbing and the results screen. The in-game rules live in play.js.
+import { connect, isConfigured } from './fb.js?v=mvvfeq0n';
+import { loadEngine } from './map.js?v=mvvfeq0n';
 import qrcode from '../vendor/qrcode/qrcode.js';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate, GpsFilter, nudgeLocation } from './geo.js?v=mvusup4b';
+import { watchLocation, nudgeLocation } from './geo.js?v=mvvfeq0n';
+import { POWERS } from './rules-config.js?v=mvvfeq0n';
+import {
+  S, $, esc, initial, r6, setHTML, fmtClock, store, load, once,
+  COLOURS, CODE_CHARS, AREA_RADII, SETTING_GROUPS, HEARTBEAT, SEEN_EVERY, DEFAULTS,
+  path, settings, huntStart, huntEnd, isHost, name, roleOf, myRole, startingHiders, activeHiders, area, byJoin,
+  present, successor, hostGone, phase, sendLocation, sendSeen, knownNames, hooks, wake,
+  openSheet, closeSheet, confirmSheet, toast, showHold, scheduleRender,
+  getMap, pinHTML, fitOnce, drawArea, drawMe, recentre, toggle3D, mapStyleSheet, setMapStyle, gpsLine, playerRow,
+  isDenied, mPerDegLon, sound,
+} from './core.js?v=mvvfeq0n';
+import {
+  subscribeGame, stopGame, resetRound, onFix, tickGame, renderGame, canListen, openingCaches,
+  triggerReveal, freezeSheet, catchMenu, tryCatch, powerSheet,
+} from './play.js?v=mvvfeq0n';
 
-/* ------------------------------------------------------------------ constants */
-
-const COLOURS = [
-  '#E53935', '#FF7043', '#FB8C00', '#F9A825', '#C0CA33', '#43A047', '#00897B', '#00ACC1', '#039BE5',
-  '#3949AB', '#5E35B1', '#8E24AA', '#D81B60', '#F06292', '#6D4C41', '#546E7A', '#212121', '#9E9E9E',
-];
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const DEFAULTS = { hideSecs: 120, gameMins: 30, tagRadius: 10, revealCooldownSecs: 180, revealRadius: 100, darkSecs: 60, hidersSeeSeekers: false, powerups: 4 };
-const AREA_RADII = [150, 250, 400, 600, 1000, 1500];
-const MAX_ACC = 30;              // must match tools/build-rules.mjs
-const REVEAL_ANSWER_MS = 20000;  // must match tools/build-rules.mjs
-const SEND_EVERY = 2500;         // min gap between location uploads
-const HEARTBEAT = 4000;          // re-send last fix so we stay "live" while standing still
-const POLL_EVERY = 4000;         // seekers check for exposed hiders
-const SEEN_EVERY = 8000;         // presence heartbeat
-const PRESENT_MS = 20000;        // must match tools/build-rules.mjs
-const HOST_GONE_MS = 45000;      // must match tools/build-rules.mjs
-
-const SETTING_DEFS = [
-  { k: 'hideSecs', label: 'Head start', opts: [60, 120, 180, 300, 600], fmt: (v) => v / 60 + ' min', note: 'Seekers wait while hiders hide' },
-  { k: 'gameMins', label: 'Hunt length', opts: [10, 20, 30, 45, 60, 90], fmt: (v) => v + ' min' },
-  { k: 'tagRadius', label: 'Catch distance', opts: [5, 8, 10, 15], fmt: (v) => v + ' m', note: 'How close the seeker must be, by GPS' },
-  { k: 'revealCooldownSecs', label: 'Reveal every', opts: [120, 180, 300, 480], fmt: (v) => v / 60 + ' min', note: 'Shared by all seekers' },
-  { k: 'revealRadius', label: 'Reveal circle', opts: [50, 100, 150, 250], fmt: (v) => v + ' m', note: 'The hider is somewhere inside' },
-  { k: 'darkSecs', label: 'Exposed when offline for', opts: [30, 60, 120], fmt: (v) => v + ' s', note: 'Locking your phone shows your last spot' },
-  { k: 'hidersSeeSeekers', label: 'Hiders see seekers', opts: [false, true], fmt: (v) => (v ? 'Always' : 'Head start only') },
-  { k: 'powerups', label: 'Power-ups', opts: [0, 4, 8, 12], fmt: (v) => (v ? v + ' drops' : 'Off'), note: 'Supply drops to collect on the map' },
-];
-
-// Power-ups. Durations must match tools/build-rules.mjs.
-const POWERS = {
-  lookout: { team: 'hider', name: 'Lookout', icon: '👁️', ms: 20000, desc: 'See every seeker on your map for 20 seconds.' },
-  shield: { team: 'hider', name: 'Shield', icon: '🛡️', ms: 30000, desc: 'You can\'t be caught for 30 seconds. Save it for when a seeker is closing in.' },
-  cloak: { team: 'hider', name: 'Cloak', icon: '🌫️', ms: 180000, desc: 'For the next 3 minutes you don\'t show up in reveals, and missing one won\'t expose you.' },
-  reveal: { team: 'seeker', name: 'Extra reveal', icon: '📡', ms: 0, desc: 'Reveal every hider right now, even if reveals are on cooldown.' },
-  tracker: { team: 'seeker', name: 'Tracker', icon: '🎯', ms: 15000, desc: 'Pick a hider and see exactly where they are for 15 seconds.' },
-  freeze: { team: 'seeker', name: 'Freeze', icon: '❄️', ms: 20000, desc: 'Hiders within 75 m of you must freeze for 20 seconds, and every seeker can see them.' },
-};
-const HIDER_POWERS = ['lookout', 'shield', 'cloak'];
-const SEEKER_POWERS = ['reveal', 'tracker', 'freeze'];
-const FREEZE_M = 75;
-const PICKUP_M = 12;   // rules allow 15 m; pick up a little inside that
-const BAG_MAX = 3;
-const RESPAWN_MS = 120000;
-
-/* ------------------------------------------------------------------ helpers */
-
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const initial = (name) => esc(String(name || '?').trim().charAt(0).toUpperCase() || '?');
-const r6 = (x) => Math.round(x * 1e6) / 1e6;
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-function setHTML(el, html) { if (el && el._html !== html) { el._html = html; el.innerHTML = html; } }
-function fmtClock(ms) {
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  const pad = (n) => String(n).padStart(2, '0');
-  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
-}
-function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
-function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-
-/* ------------------------------------------------------------------ state */
-
-const S = {
-  db: null, uid: null, code: null,
-  meta: null, players: {}, caught: {}, reveal: null, circles: {},
-  locs: {}, locSubs: {}, locFail: {}, exposed: {},
-  subs: [], fix: null, gpsErr: null, stopGps: null,
-  lastSent: 0, lastPoll: 0, answering: null, answerFail: 0,
-  seenCaught: null, seenReveal: null, lastPhase: null, hiddenAt: null,
-  maps: {}, tick: null, renderQueued: false, threeD: false, follow: false, engine: 'leaflet', endSent: false,
-  drops: {}, fx: {}, freeze: null, pickTried: {}, lastSpawn: 0, seenFreeze: null, seenFx: null,
-  mapStyle: load('mapStyle') || 'light',
-  seen: {}, lastSeenSent: 0, lastHost: null, claiming: false, leaving: false,
-};
-const wake = new WakeLock(() => scheduleRender());
-S.filter = new GpsFilter();
-
-const path = (p) => `games/${S.code}/${p}`;
-const settings = () => Object.assign({}, DEFAULTS, (S.meta && S.meta.settings) || {});
-const huntStart = () => S.meta.startAt + settings().hideSecs * 1000;
-const huntEnd = () => huntStart() + settings().gameMins * 60000;
-const isHost = () => !!S.meta && S.meta.host === S.uid;
-// Remember names so history still reads right after someone leaves.
-const knownNames = {};
-const name = (u) => (S.players[u] ? S.players[u].name : knownNames[u] || 'a player who left');
-const roleOf = (u) => { const p = S.players[u]; if (!p) return null; return p.role === 'seeker' || S.caught[u] ? 'seeker' : 'hider'; };
-const myRole = () => roleOf(S.uid);
-const startingHiders = () => Object.keys(S.players).filter((u) => S.players[u].role === 'hider');
-const activeHiders = () => startingHiders().filter((u) => !S.caught[u]);
-const area = () => S.meta && S.meta.area;
-const fxOf = (u, k) => (S.fx[u] && S.fx[u][k]) || null;
-const fxLeft = (u, k) => { const f = fxOf(u, k); return f ? Math.max(0, f.t + POWERS[k].ms - S.db.now()) : 0; };
-const fxActive = (u, k) => fxLeft(u, k) > 0;
-const freezeLeft = () => (S.freeze ? Math.max(0, S.freeze.t + POWERS.freeze.ms - S.db.now()) : 0);
-const frozenAt = (loc) => !!loc && freezeLeft() > 0 && distM(loc, S.freeze) <= FREEZE_M;
-const cloakedFor = (u, rv) => { const c = fxOf(u, 'cloak'); return !!(c && rv && c.t > rv.t - POWERS.cloak.ms); };
-const powerOf = (d) => (d.c && d.c.as === 'hider' ? d.h : d.s);
-function myBag() {
-  return Object.entries(S.drops)
-    .filter(([, d]) => d.c && d.c.by === S.uid && !d.u)
-    .map(([id, d]) => ({ id, kind: powerOf(d), usable: d.c.as === myRole() }));
-}
-const takenColours = () => {
-  const out = {};
-  for (const [u, p] of Object.entries(S.players)) if (u !== S.uid) out[p.color] = p.name;
-  return out;
-};
-const present = (u) => !!S.seen[u] && S.db.now() - S.seen[u] < PRESENT_MS;
-const byJoin = (a, b) => (S.players[a].joinedAt || 0) - (S.players[b].joinedAt || 0);
-// Who should take over as organiser: the longest-standing player whose phone is live.
-function successor(exclude) {
-  const ids = Object.keys(S.players).filter((u) => u !== exclude).sort(byJoin);
-  return ids.find(present) || ids[0] || null;
-}
-function hostGone() {
-  const h = S.meta && S.meta.host;
-  if (!h) return false;
-  if (!S.players[h]) return true;
-  const t = S.seen[h];
-  return t ? S.db.now() - t > HOST_GONE_MS : S.db.now() - (S.meta.createdAt || 0) > HOST_GONE_MS;
-}
-const outside = (loc) => { const a = area(); return !!(a && loc && distM(loc, a, a.mlon) > a.r); };
-
-function phase() {
-  const m = S.meta;
-  if (!m) return 'none';
-  if (m.status === 'lobby' || !m.startAt) return 'lobby';
-  if (m.status === 'ended') return 'ended';
-  const now = S.db.now();
-  if (now < huntStart()) return 'hiding';
-  if (now < huntEnd() && activeHiders().length > 0) return 'hunt';
-  return 'ended';
-}
+const { cue, play, say } = sound;
+hooks.render = render;
 
 /* ------------------------------------------------------------------ boot */
 
@@ -179,7 +61,7 @@ function show(screen) {
     S.screen = screen;
     window.scrollTo(0, 0);
     if (screen === 'game') wake.enable(); else wake.disable();
-    setTimeout(() => Object.values(S.maps).forEach((m) => m.resize()), 50);
+    setTimeout(() => Object.values(S.maps).forEach((mp) => mp.resize()), 50);
   }
 }
 
@@ -206,18 +88,18 @@ function setupHome() {
   };
   $('#create').addEventListener('click', async () => {
     const p = me(); if (!p) return;
-    busy($('#create'), true);
+    $('#create').disabled = true;
     try { await createGame(p); } catch (e) { console.error(e); homeError('Couldn\'t create the game. Try again.'); }
-    busy($('#create'), false);
+    $('#create').disabled = false;
   });
   $('#join-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const p = me(); if (!p) return;
     const code = $('#code').value.trim().toUpperCase();
     if (!/^[A-Z2-9]{5}$/.test(code)) { homeError('Codes are 5 letters and numbers.'); return; }
-    busy($('#join-form button'), true);
+    $('#join-form button').disabled = true;
     try { await joinGame(code, p); } catch (err) { console.error(err); homeError('Couldn\'t join. Check the code and try again.'); }
-    busy($('#join-form button'), false);
+    $('#join-form button').disabled = false;
   });
   const params = new URLSearchParams(location.search);
   const invite = (params.get('code') || '').toUpperCase();
@@ -230,7 +112,6 @@ function setupHome() {
   }
 }
 function homeError(t) { $('#home-error').textContent = t; }
-function busy(btn, on) { btn.disabled = on; }
 
 async function createGame(p) {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -254,7 +135,10 @@ async function joinGame(code, p) {
   if (!meta) { homeError(`There's no game with code ${code}.`); return; }
   const already = await S.db.get(`games/${code}/players/${S.uid}`);
   if (!already) {
-    if (meta.status !== 'lobby') { homeError('That game has already started. Ask the organiser to take everyone back to the lobby.'); return; }
+    const st = Object.assign({}, DEFAULTS, meta.settings || {});
+    const ends = (meta.startAt || 0) + st.hideSecs * 1000 + st.gameMins * 60000;
+    const live = meta.status === 'live' && S.db.now() < ends;
+    if (meta.status !== 'lobby' && !live) { homeError('That game has just finished. Ask the organiser to take everyone back to the lobby, then join.'); return; }
     const others = Object.values((await S.db.get(`games/${code}/players`)) || {});
     const used = new Set(others.map((o) => o.color));
     let color = p.color;
@@ -263,7 +147,9 @@ async function joinGame(code, p) {
       store('colour', color);
       setTimeout(() => toast('Someone already had your colour, so you\'ve got a new one. Tap your name to change it.', 'warn', 6000), 800);
     }
-    await S.db.set(`games/${code}/players/${S.uid}`, { name: p.name, color, role: 'hider', joinedAt: S.db.TS });
+    // Joining a game that's already running? You join the hunters (as in Hide Tag).
+    await S.db.set(`games/${code}/players/${S.uid}`, { name: p.name, color, role: live ? 'seeker' : 'hider', joinedAt: S.db.TS });
+    if (live) setTimeout(() => toast('This game has already started, so you\'ve joined the hunters.', 'seeker', 6000), 600);
   }
   return enterGame(code);
 }
@@ -274,28 +160,27 @@ function enterGame(code) {
   S.code = code;
   store('game', code);
   history.replaceState(null, '', location.pathname);
-  const on = (p, cb) => S.subs.push(S.db.on(path(p), cb, (e) => console.warn('listen failed', p, e)));
+  const on = (p, cb, onErr) => S.subs.push(S.db.on(path(p), (v) => { if (!S.leaving) { cb(v); scheduleRender(); } }, onErr || ((e) => console.warn('listen failed', p, e))));
   on('meta', (v) => {
-    if (S.leaving) return;
     if (!v) { toast('That game was closed.', 'bad'); leaveGame(true); return; }
     S.meta = v;
     onHostChange();
-    scheduleRender();
   });
   on('players', (v) => {
-    if (S.leaving) return;
+    const before = S.players;
     S.players = v || {};
     for (const [u, p] of Object.entries(S.players)) knownNames[u] = p.name;
     if (S.meta && !S.players[S.uid] && S.code) { toast('The organiser removed you from the game.', 'bad'); leaveGame(true); return; }
-    scheduleRender();
+    const joined = Object.keys(S.players).filter((u) => !before[u] && u !== S.uid);
+    if (Object.keys(before).length && joined.length) {
+      play('joined');
+      if (phase() !== 'lobby') joined.forEach((u) => toast(`${name(u)} joined the hunters.`, 'seeker'));
+    }
   });
-  on('caught', (v) => { S.caught = v || {}; onCaughtChange(); scheduleRender(); });
-  on('reveal', (v) => { S.reveal = v; onRevealChange(); scheduleRender(); });
-  on('circles', (v) => { S.circles = v || {}; scheduleRender(); });
-  on('drops', (v) => { S.drops = v || {}; scheduleRender(); });
-  on('fx', (v) => { S.fx = v || {}; onFxChange(); scheduleRender(); });
-  on('freeze', (v) => { S.freeze = v; onFreezeChange(); scheduleRender(); });
-  on('seen', (v) => { S.seen = v || {}; scheduleRender(); });
+  on('caught', (v) => { S.caught = v || {}; onCaughtChange(); });
+  on('seen', (v) => { S.seen = v || {}; });
+  on('locs/' + S.uid, (v) => { S.myLoc = v; });
+  subscribeGame(on);
   S.leaving = false;
   sendSeen();
 
@@ -308,23 +193,33 @@ function enterGame(code) {
   $('#code-big').textContent = code;
 }
 
-function leaveGame(silent) {
+async function leaveGame(silent) {
   const code = S.code;
+  const wasHider = phase() === 'hunt' && myRole() === 'hider';
   S.leaving = true;
-  S.subs.forEach((u) => u()); S.subs = [];
   if (!silent && code && S.players[S.uid]) {
+    // A hider who walks away mid-game is out (the results say they quit).
+    if (wasHider) { try { await S.db.set(`games/${code}/caught/${S.uid}`, { by: S.uid, t: S.db.TS, how: 'quit' }); } catch (e) { /* fine */ } }
     const upd = { [`players/${S.uid}`]: null, [`locs/${S.uid}`]: null, [`seen/${S.uid}`]: null };
     const next = isHost() ? successor(S.uid) : null;
     if (next) upd['meta/host'] = next;
     S.db.update(`games/${code}`, upd).catch((e) => console.warn('leave failed', e));
   }
+  S.subs.forEach((u) => u()); S.subs = [];
+  stopGame();
   Object.values(S.locSubs).forEach((u) => u()); S.locSubs = {};
   if (S.stopGps) S.stopGps();
   clearInterval(S.tick);
-  Object.values(S.maps).forEach((m) => m.remove()); S.maps = {};
+  Object.values(S.maps).forEach((mp) => mp.remove()); S.maps = {};
   closeSheet();
   $('#hold').hidden = true;
-  Object.assign(S, { seen: {}, lastHost: null, code: null, meta: null, players: {}, caught: {}, reveal: null, circles: {}, locs: {}, locFail: {}, exposed: {}, seenCaught: null, seenReveal: null, lastPhase: null, answering: null, endSent: false, drops: {}, fx: {}, freeze: null, pickTried: {}, seenFreeze: null, seenFx: null });
+  Object.assign(S, {
+    seen: {}, lastHost: null, code: null, meta: null, players: {}, caught: {}, reveal: null, rcut: null, circles: {},
+    freeze: null, fcut: null, fz: {}, prints: {}, caches: {}, bag: {}, fx: {}, flare: null, snap: {}, scan: {},
+    mission: null, mhold: {}, mfail: 0, locs: {}, myLoc: null, locFail: {}, exposed: {}, endSent: false,
+    seenCaught: null, lastPhase: null,
+  });
+  resetRound();
   store('game', null);
   show('home');
 }
@@ -334,6 +229,7 @@ function onRawFix(f) {
   S.rawFix = f;
   S.fix = S.filter.push(f);
   S.gpsErr = null;
+  onFix(f);
   sendLocation(false);
   scheduleRender();
 }
@@ -347,23 +243,14 @@ function tick() {
   if (Date.now() - S.lastSeenSent > SEEN_EVERY) sendSeen();
   maybeClaimHost();
   reconcileLocListeners();
-  if (ph === 'hunt' && myRole() === 'seeker' && Date.now() - S.lastPoll > POLL_EVERY) pollExposed();
-  if (ph === 'hunt' && myRole() === 'hider') answerReveal();
-  if (ph === 'hunt') autoPickup();
-  if (ph === 'hunt' && isHost()) respawnDrops();
+  if (S.lastPhase && S.lastPhase !== ph) onPhaseChange(S.lastPhase, ph);
+  S.lastPhase = ph;
+  try { tickGame(ph); } catch (e) { console.error('tick', e); }
   if (ph === 'ended' && isHost() && S.meta.status === 'live' && !S.endSent) {
     S.endSent = true;
     S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS }).catch(() => { S.endSent = false; });
   }
-  if (S.lastPhase && S.lastPhase !== ph) onPhaseChange(S.lastPhase, ph);
-  S.lastPhase = ph;
   scheduleRender();
-}
-
-function sendSeen() {
-  if (!S.code || S.leaving) return;
-  S.lastSeenSent = Date.now();
-  S.db.set(path('seen/' + S.uid), S.db.TS).catch(() => {});
 }
 
 async function maybeClaimHost() {
@@ -379,70 +266,42 @@ function onHostChange() {
   if (S.lastHost && h !== S.lastHost) {
     if (h === S.uid) {
       const ended = phase() === 'ended';
+      cue('confirm', null, { buzz: [100, 60, 100] });
       toast(`You're now the organiser${ended ? '. You can take everyone back to the lobby.' : '.'}`, 'seeker', 6000);
-      vibrate([100, 60, 100]);
     } else toast(`${name(h)} is now the organiser.`);
   }
   S.lastHost = h;
 }
 
 function onPhaseChange(from, to) {
+  if (to === 'hiding' || to === 'lobby') { resetRound(); S.seenCaught = Object.keys(S.caught); }
+  if (to === 'lobby') { S.endSent = false; }
   if (to === 'hunt') {
     const seeker = myRole() === 'seeker';
-    showHold(seeker ? '<h2>Go!</h2><p>The hunt is on. Find the hiders.</p>' : '<h2>They\'re coming</h2><p>The hunt is on. Stay hidden.</p>', 2200, seeker ? 'seeker' : 'hider');
-    vibrate([300, 120, 300]);
+    showHold(seeker ? '<h2>Go!</h2><p>The hunt is on. Find the hiders.</p>' : '<h2>They\'re coming</h2><p>The hunt is on. Stay hidden, and don\'t run unless you have to.</p>', 2600, seeker ? 'seeker' : 'hider');
+    cue('whistle_end', seeker ? 'The hunt has begun. Go and find them.' : 'The hunt has begun. Hunters are coming. Running now leaves footprints.', { urgent: true, buzz: [300, 120, 300] });
   }
-  if (to === 'hiding') vibrate(200);
-  if (to === 'ended') vibrate([200, 100, 200, 100, 400]);
-  if (to === 'lobby') { S.endSent = false; S.answering = null; S.exposed = {}; S.seenCaught = null; S.seenReveal = null; S.pickTried = {}; S.seenFreeze = null; S.seenFx = null; }
-  if (to === 'hunt') S.lastSpawn = Date.now();
+  if (to === 'ended' && from !== 'lobby') {
+    const hidersWin = activeHiders().length > 0;
+    const orig = (S.players[S.uid] || {}).role;
+    const iWon = hidersWin ? orig === 'hider' && !S.caught[S.uid] : orig === 'seeker';
+    cue(iWon ? 'win' : 'lose', hidersWin ? 'Time\'s up. The hiders win.' : 'Every hider has been caught. The hunters win.', { urgent: true, buzz: [200, 100, 200, 100, 400] });
+  }
 }
 
+let hiddenAt = null;
 function onVisibility() {
-  if (document.visibilityState === 'hidden') { S.hiddenAt = Date.now(); return; }
-  const away = S.hiddenAt ? Date.now() - S.hiddenAt : 0;
-  S.hiddenAt = null;
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = null;
   if (!S.code || !S.meta) return;
   sendSeen();
   nudgeLocation(onRawFix);
   sendLocation(true);
   if (phase() === 'hunt' && myRole() === 'hider' && away > settings().darkSecs * 1000) {
-    toast(`You were away for ${Math.round(away / 1000)} s, so seekers could see where you were.`, 'warn', 6000);
+    cue('warn', null);
+    toast(`You were away for ${Math.round(away / 1000)} s, so hunters could see where you were.`, 'warn', 6000);
   }
-}
-
-/* ------------------------------------------------------------------ location */
-
-// `precise`: send the latest raw GPS fix rather than the smoothed one (used for catches and
-// pick-ups, where being current matters more than being steady).
-async function sendLocation(force, precise) {
-  const f = precise && S.rawFix && Date.now() - S.rawFix.at < 5000 ? S.rawFix : S.fix;
-  if (!f || !S.code || !S.meta) return;
-  if (S.meta.status === 'ended') return;
-  if (!force && Date.now() - S.lastSent < SEND_EVERY) return;
-  S.lastSent = Date.now();
-  try {
-    await S.db.set(path('locs/' + S.uid), { lat: r6(f.lat), lng: r6(f.lng), acc: Math.min(f.acc, 99999), t: S.db.TS });
-  } catch (e) { console.warn('location upload failed', e); }
-}
-
-// Wait (up to `timeout`) for a GPS fix newer than `maxAge`.
-async function freshFix(maxAge, timeout = 8000) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeout) {
-    if (S.fix && Date.now() - S.fix.at <= maxAge) return S.fix;
-    await wait(250);
-  }
-  return S.fix;
-}
-
-function canListen(u) {
-  if (u === S.uid || !S.players[u]) return false;
-  const ph = phase();
-  if (ph === 'lobby' || ph === 'ended') return true;
-  const me = myRole(), them = roleOf(u);
-  if (them === 'seeker') return me === 'seeker' || ph === 'hiding' || settings().hidersSeeSeekers === true || (me === 'hider' && fxActive(S.uid, 'lookout'));
-  return them === 'hider' && me === 'hider';
 }
 
 function reconcileLocListeners() {
@@ -463,135 +322,39 @@ function reconcileLocListeners() {
   }
 }
 
-// Seekers can only read a hider's position when the server says they're exposed.
-async function pollExposed() {
-  S.lastPoll = Date.now();
-  const found = {};
-  await Promise.all(activeHiders().map(async (u) => {
-    try { const v = await S.db.get(path('locs/' + u)); if (v) found[u] = v; } catch (e) { /* hidden: as it should be */ }
-  }));
-  const before = Object.keys(S.exposed).join();
-  S.exposed = found;
-  const newly = Object.keys(found).filter((u) => !before.split(',').includes(u));
-  if (newly.length && phase() === 'hunt') {
-    toast(`${newly.map(name).join(', ')} exposed: ${exposedReason(found[newly[0]], newly[0])}.`, 'warn');
-    vibrate(150);
-  }
-  scheduleRender();
-}
-
-function exposedReason(loc, u) {
-  const now = S.db.now();
-  if (!loc) return 'position visible';
-  const tr = fxOf(S.uid, 'tracker');
-  if (tr && tr.target === u && fxActive(S.uid, 'tracker')) return `tracked, ${Math.ceil(fxLeft(S.uid, 'tracker') / 1000)} s`;
-  if (frozenAt(loc)) return `frozen, ${Math.ceil(freezeLeft() / 1000)} s`;
-  if (now - loc.t > settings().darkSecs * 1000) return `offline for ${Math.round((now - loc.t) / 1000)} s`;
-  if (outside(loc)) return 'outside the play area';
-  const c = S.circles[u];
-  if (S.reveal && (!c || c.n !== S.reveal.n)) return 'didn\'t answer the reveal';
-  return 'position visible';
-}
-
-/* ------------------------------------------------------------------ reveal / catch */
-
-async function answerReveal() {
-  const rv = S.reveal;
-  if (!rv || phase() !== 'hunt' || myRole() !== 'hider') return;
-  const mine = S.circles[S.uid];
-  if (mine && mine.n === rv.n) return;
-  if (cloakedFor(S.uid, rv)) return; // cloaked: don't show up in this reveal
-  if (S.answering === rv.n) return;
-  if (Date.now() - S.answerFail < 3000) return;
-  S.answering = rv.n;
-  try {
-    const f = await freshFix(6000);
-    if (!f) throw new Error('no gps');
-    await sendLocation(true);
-    const r = settings().revealRadius;
-    const c = randomPointNear(f, r * 0.85);
-    await S.db.set(path('circles/' + S.uid), { n: rv.n, lat: r6(c.lat), lng: r6(c.lng), r, t: S.db.TS });
-  } catch (e) {
-    console.warn('reveal answer failed', e);
-    S.answering = null;
-    S.answerFail = Date.now();
-  }
-}
-
-function onRevealChange() {
-  const n = S.reveal ? S.reveal.n : 0;
-  if (S.seenReveal === null) { S.seenReveal = n; return; }
-  if (n > S.seenReveal && phase() === 'hunt') {
-    if (myRole() === 'hider') {
-      if (cloakedFor(S.uid, S.reveal)) toast('Reveal! Your cloak kept you out of it.', 'hider', 5000);
-      else { toast('Reveal! Seekers can see a circle you\'re somewhere inside.', 'bad', 5000); vibrate([400, 150, 400]); answerReveal(); }
-    } else {
-      const cloaked = activeHiders().filter((u) => cloakedFor(u, S.reveal));
-      toast(`${name(S.reveal.by)} used ${S.reveal.boost ? 'an extra' : 'a'} reveal. Search the circles.${cloaked.length ? ` ${cloaked.map(name).join(', ')} ${cloaked.length === 1 ? 'is' : 'are'} cloaked.` : ''}`, 'seeker', 5000);
-      vibrate(200);
-    }
-  }
-  S.seenReveal = n;
-}
-
 function onCaughtChange() {
   const keys = Object.keys(S.caught);
-  if (S.seenCaught === null) { S.seenCaught = keys; return; }
+  if (S.seenCaught == null) { S.seenCaught = keys; return; }
   const fresh = keys.filter((k) => !S.seenCaught.includes(k));
   S.seenCaught = keys;
+  const left = activeHiders().length;
+  const leftLine = left ? `${left} hider${left === 1 ? '' : 's'} left.` : '';
   for (const h of fresh) {
     const c = S.caught[h];
     if (h === S.uid) {
-      showHold(`<h2>You've been caught</h2><p>${c.how === 'self' ? 'You owned up.' : `${esc(name(c.by))} got you.`} You're a seeker now: go and help find the others.</p>`, 4500);
-      vibrate([500, 200, 500]);
+      const why = c.how === 'out' ? 'You were eliminated.' : c.how === 'self' ? 'You owned up.' : c.how === 'quit' ? 'You left the game.' : `${esc(name(c.by))} got you.`;
+      showHold(`<h2>You're out</h2><p>${why} You're a hunter now: go and help find the others.</p>`, 4500, 'seeker');
+      cue('caught_me', `${c.how === 'out' ? 'Eliminated' : 'Caught'}. You're a hunter now. ${leftLine}`, { urgent: true, buzz: [500, 200, 500] });
     } else {
-      const how = c.how === 'host' ? ' (organiser override)' : c.how === 'self' ? ' (owned up)' : '';
-      toast(c.how === 'self' ? `${name(h)} was caught${how}.` : `${name(c.by)} caught ${name(h)}${how}.`, 'seeker');
-      vibrate(150);
+      const how = c.how === 'host' ? ' (organiser override)' : '';
+      const text = c.how === 'out' ? `${name(h)} was eliminated.` : c.how === 'quit' ? `${name(h)} left the game.` : c.how === 'self' ? `${name(h)} was caught.` : `${name(c.by)} caught ${name(h)}${how}.`;
+      toast(text, 'seeker');
+      cue(myRole() === 'seeker' ? 'caught_other' : 'turned', `${text} ${leftLine}`, { buzz: 150 });
     }
   }
-}
-
-async function tryCatch(u, how) {
-  closeSheet();
-  const r = settings().tagRadius;
-  if (how === 'gps') {
-    if (!S.fix) { toast('No GPS fix yet. Make sure location is allowed.', 'bad'); return; }
-    if (S.fix.acc > MAX_ACC) { toast(`Your GPS is too rough (±${S.fix.acc} m). Step into the open and try again in a moment.`, 'bad', 6000); return; }
-    toast('Checking distance…');
-    await freshFix(4000, 5000);
-    await sendLocation(true, true);
-  }
-  try {
-    await S.db.set(path('caught/' + u), { by: S.uid, t: S.db.TS, how });
-  } catch (e) {
-    if (!isDenied(e)) { toast('Couldn\'t reach the server. Try again.', 'bad'); return; }
-    if (S.caught[u]) toast(`${name(u)} has already been caught.`);
-    else if (how === 'gps' && fxActive(u, 'shield')) toast(`${name(u)} has a shield for ${Math.ceil(fxLeft(u, 'shield') / 1000)} more seconds.`, 'bad', 5000);
-    else if (how === 'gps') toast(`Not counted: ${name(u)} isn't within ${r} m of you by GPS. Both phones need the app open. Stay next to them a few seconds and try again.`, 'bad', 7000);
-    else toast('Not allowed right now.', 'bad');
-  }
-}
-
-async function triggerReveal() {
-  const n = (S.reveal ? S.reveal.n : 0) + 1;
-  try { await S.db.set(path('reveal'), { n, t: S.db.TS, by: S.uid }); }
-  catch (e) { toast(isDenied(e) ? 'Reveal isn\'t ready yet.' : 'Couldn\'t reach the server.', 'bad'); }
-}
-
-function nextRevealAt() {
-  const cd = settings().revealCooldownSecs * 1000;
-  return S.reveal ? S.reveal.t + cd : huntStart() + cd;
 }
 
 /* ------------------------------------------------------------------ clicks */
 
+let preloaded = false;
 async function onClick(e) {
+  if (!preloaded) { preloaded = true; sound.unlock(); sound.preload(sound.ALL_SOUNDS); }
   if (S.screen === 'game' && !wake.active) wake.enable();
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const a = el.dataset.action;
   const u = el.dataset.uid;
+  if (a !== 'close-sheet') play('tap', { volume: 0.5, gap: 60 });
   switch (a) {
     case 'leave': return leaveSheet();
     case 'share-code': return shareCode();
@@ -600,43 +363,51 @@ async function onClick(e) {
     case 'menu': return menuSheet();
     case 'roster': return rosterSheet();
     case 'help': return helpSheet();
+    case 'sound': return soundSheet();
     case 'player-menu': return playerSheet(u);
     case 'make-host': closeSheet(); return S.db.set(path('meta/host'), u).catch(() => toast('Couldn\'t hand over the organiser role.', 'bad'));
     case 'set-role': closeSheet(); return S.db.set(path(`players/${u}/role`), el.dataset.v).catch(() => toast('Couldn\'t change teams.', 'bad'));
-    case 'kick': return confirmSheet(`Remove ${name(u)}?`, 'They can rejoin with the code while you\'re in the lobby.', 'Remove', () => S.db.remove(path('players/' + u)).catch(() => toast('Couldn\'t remove them.', 'bad')));
+    case 'kick': return confirmSheet(`Remove ${name(u)}?`, 'They can rejoin with the code.', 'Remove', () => S.db.remove(path('players/' + u)).catch(() => toast('Couldn\'t remove them.', 'bad')), true);
     case 'toggle-role':
-      if (!isHost()) return;
+      if (!isHost()) return undefined;
       return S.db.set(path(`players/${u}/role`), S.players[u].role === 'seeker' ? 'hider' : 'seeker').catch(() => toast('Couldn\'t change teams.', 'bad'));
-    case 'shuffle': return shuffleSeekers();
+    case 'shuffle': return shuffleHunters();
     case 'setting': {
-      if (!isHost()) return;
+      if (!isHost()) return undefined;
       const k = el.dataset.k;
       const v = el.dataset.v === 'true' ? true : el.dataset.v === 'false' ? false : Number(el.dataset.v);
       return S.db.set(path('meta/settings/' + k), v).catch(() => toast('Couldn\'t save that setting.', 'bad'));
     }
+    case 'pool': {
+      if (!isHost()) return undefined;
+      const k = el.dataset.k;
+      const pool = (S.meta.settings && S.meta.settings.pool) || {};
+      return S.db.set(path('meta/settings/pool/' + k), pool[k] === false).catch(() => toast('Couldn\'t save that setting.', 'bad'));
+    }
+    case 'preset': return applyPreset(el.dataset.v);
     case 'area-radius': {
-      if (!isHost()) return;
-      const a2 = area() || (S.fix && { lat: S.fix.lat, lng: S.fix.lng, mlon: mPerDegLon(S.fix.lat) });
+      if (!isHost()) return undefined;
+      const a2 = area() || (S.fix && { lat: S.fix.lat, lng: S.fix.lng });
       if (!a2) return toast('Waiting for GPS. Or tap the map to place the play area.', 'warn');
       return setArea(a2.lat, a2.lng, Number(el.dataset.v));
     }
     case 'area-here':
       if (!S.fix) return toast('Waiting for GPS…', 'warn');
-      return setArea(S.fix.lat, S.fix.lng, (area() && area().r) || 400);
+      return setArea(S.fix.lat, S.fix.lng, (area() && area().r) || 500);
     case 'start': return startGame();
     case 'catch-menu': return catchMenu();
     case 'catch': return tryCatch(u, el.dataset.how);
     case 'override-menu': return catchMenu(true);
     case 'reveal': return triggerReveal();
-    case 'self-caught': return confirmSheet('Were you caught?', 'Only use this if a seeker tagged you and their Catch button didn\'t work. You\'ll join the seekers.', 'Yes, I was caught', () => tryCatch(S.uid, 'self'));
-    case 'end-now': return confirmSheet('End the game now?', 'Everyone goes to the results screen.', 'End game', () => S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS }));
+    case 'freeze': return freezeSheet();
+    case 'self-caught': return confirmSheet('Were you caught?', 'Only use this if a hunter tagged you and their Catch button didn\'t work. You\'ll join the hunters.', 'Yes, I was caught', () => tryCatch(S.uid, 'self'));
+    case 'end-now': return confirmSheet('End the game now?', 'Everyone goes to the results screen.', 'End game', () => S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS }), true);
     case 'recentre': return recentre();
     case 'map-style': return mapStyleSheet();
     case 'set-map-style': return setMapStyle(el.dataset.v);
     case 'three-d': return toggle3D();
     case 'profile': return profileSheet();
-    case 'power': return powerSheet(el.dataset.id);
-    case 'use-power': return usePower(el.dataset.id, u);
+    case 'power': return powerSheet(el.dataset.kind);
     case 'gps-help': return gpsHelp();
     case 'again': return backToLobby();
     case 'close-sheet': return closeSheet();
@@ -668,7 +439,7 @@ function qrSvg(text) {
 
 function inviteSheet() {
   openSheet(`<h2>Invite friends</h2>
-    <p>Scan with a phone camera, or enter the code on the Manhunt home screen.</p>
+    <p>Scan with a phone camera, or enter the code on the Manhunt home screen.${phase() !== 'lobby' ? ' The game has started, so they\'ll join the hunters.' : ''}</p>
     <div class="qr">${qrSvg(inviteUrl())}</div>
     <div class="invite-code" aria-label="Join code">${esc(S.code)}</div>
     <div class="pick">
@@ -683,18 +454,20 @@ function leaveSheet() {
   const next = isHost() ? successor(S.uid) : null;
   const handover = next ? ` ${name(next)} will become the organiser.` : '';
   const body = ph === 'lobby'
-    ? `You can rejoin with the code while the game is in the lobby.${handover}`
+    ? `You can rejoin with the code.${handover}`
     : ph === 'ended'
-      ? `You can rejoin when everyone goes back to the lobby.${handover}`
-      : `You'll leave this round and can't rejoin until it's over.${myRole() === 'hider' ? ' Leaving counts as being out.' : ''}${handover}`;
-  confirmSheet('Leave this game?', body, 'Leave', () => leaveGame(false));
+      ? `You can rejoin with the code.${handover}`
+      : `${myRole() === 'hider' && ph === 'hunt' ? 'Leaving counts as being out. ' : ''}You can rejoin with the code as a hunter.${handover}`;
+  confirmSheet('Leave this game?', body, 'Leave', () => leaveGame(false), true);
 }
 
 function menuSheet() {
   const ph = phase();
   openSheet(`<h2>Menu</h2><div class="pick">
     <button class="btn btn-quiet" data-action="roster">Players</button>
+    <button class="btn btn-quiet" data-action="invite">Invite</button>
     <button class="btn btn-quiet" data-action="profile">Your name and colour</button>
+    <button class="btn btn-quiet" data-action="sound">Sound and voice</button>
     <button class="btn btn-quiet" data-action="help">How to play</button>
     ${isHost() && (ph === 'hiding' || ph === 'hunt') ? '<button class="btn btn-quiet" data-action="end-now">End the game for everyone</button>' : ''}
     <button class="btn btn-danger" data-action="leave">Leave game</button>
@@ -702,20 +475,13 @@ function menuSheet() {
   </div>`);
 }
 
-function playerRow(u, extra) {
-  const p = S.players[u];
-  const tags = [u === S.uid ? 'you' : '', present(u) || u === S.uid ? '' : 'offline'].filter(Boolean).join(', ');
-  return `<li class="player"><span class="player-dot${present(u) || u === S.uid ? '' : ' away'}" style="background:${esc(p.color)}">${initial(p.name)}</span>
-    <span class="player-name">${u === S.meta.host ? '<span class="crown" aria-label="Organiser">👑</span>' : ''}${esc(p.name)} <small>${esc(tags)}</small></span>${extra || ''}</li>`;
-}
-
 function rosterSheet() {
   const ph = phase();
   const ids = Object.keys(S.players).sort(byJoin);
   const status = (u) => {
     const c = S.caught[u];
-    if (S.players[u].role === 'seeker') return '<span class="tag seeker">Seeker</span>';
-    if (c) return `<span class="tag caught">Caught ${ph === 'lobby' ? '' : fmtClock(c.t - huntStart())}</span>`;
+    if (S.players[u].role === 'seeker') return '<span class="tag seeker">Hunter</span>';
+    if (c) return `<span class="tag caught">${c.how === 'out' ? 'Eliminated' : 'Caught'} ${ph === 'lobby' ? '' : fmtClock(c.t - huntStart())}</span>`;
     return '<span class="tag hider">Hiding</span>';
   };
   openSheet(`<h2>Players</h2><ul class="players">${ids.map((u) => playerRow(u, status(u))).join('')}</ul>
@@ -727,7 +493,7 @@ function playerSheet(u) {
   if (!p || !isHost()) return;
   const other = p.role === 'seeker' ? 'hider' : 'seeker';
   openSheet(`<h2>${esc(p.name)}</h2><p>${present(u) ? 'Online now.' : 'Their phone hasn\'t been in touch for a while.'}</p><div class="pick">
-    <button class="btn btn-quiet" data-action="set-role" data-uid="${esc(u)}" data-v="${other}">Make ${other}</button>
+    <button class="btn btn-quiet" data-action="set-role" data-uid="${esc(u)}" data-v="${other}">Make ${other === 'seeker' ? 'hunter' : 'hider'}</button>
     ${u !== S.uid ? `<button class="btn btn-quiet" data-action="make-host" data-uid="${esc(u)}">Make organiser</button>
     <button class="btn btn-danger" data-action="kick" data-uid="${esc(u)}">Remove from game</button>` : ''}
     <button class="btn btn-quiet" data-action="close-sheet">Close</button></div>`);
@@ -735,180 +501,106 @@ function playerSheet(u) {
 
 function helpSheet() {
   const st = settings();
+  const hk = Object.keys(POWERS).filter((k) => POWERS[k].side !== 'seeker');
+  const sk = Object.keys(POWERS).filter((k) => POWERS[k].side !== 'hider');
+  const list = (ks) => ks.map((k) => `<li>${POWERS[k].icon} <b>${esc(POWERS[k].name)}</b>: ${esc(POWERS[k].desc)}</li>`).join('');
   openSheet(`<h2>How to play</h2>
     <div class="help">
-      <p><b>Hiders</b> get a ${st.hideSecs / 60}-minute head start, then the hunt lasts ${st.gameMins} minutes. Stay inside the dashed circle.</p>
-      <p><b>Seekers</b> wait until the head start ends, then hunt. To catch someone, tag them, tap <b>Catch</b> and pick their name. It only counts if your phones are within ${st.tagRadius} m by GPS.</p>
-      <p><b>Caught hiders</b> join the seekers. Seekers win if they catch everyone; hiders win if anyone is still free when time runs out.</p>
-      <p><b>Reveals</b> (every ${st.revealCooldownSecs / 60} min) show seekers a ${st.revealRadius} m circle that each hider is somewhere inside.</p>
-      <p><b>You're exposed</b>, meaning seekers see exactly where you are, if you leave the play area, your phone misses a reveal, or the game is closed or your screen is locked for ${st.darkSecs} s. Keep the game open.</p>
-      ${st.powerups ? '<p><b>Power-ups</b>: walk to a purple diamond to pick one up, then tap it in your bar to use it.</p>' : ''}
+      <p><b>Hiders</b> get a ${fmtClock(st.hideSecs * 1000)} head start, then the hunt lasts ${st.gameMins} minutes. Stay inside the dashed circle${st.shrinkPct < 100 ? `, which slowly shrinks to ${st.shrinkPct}% of its size` : ''}.</p>
+      <p><b>Hunters</b> catch a hider by tagging them, then tapping <b>Catch</b>. It only counts if your phones are within ${st.tagRadius} m by GPS. Caught hiders join the hunters. Hunters win if they catch everyone; hiders win if anyone is still out there when time runs out.</p>
+      <p><b>Reveal</b> (every ${fmtClock(st.revealCooldownSecs * 1000)}) shows hunters a ${st.revealRadius} m circle each hider is somewhere inside. Hiders aren't always told.</p>
+      <p><b>Freeze</b>: any hider within ${st.freezeM} m of a hunter gets ${st.coverSecs} s to find cover, then must hold still for ${st.holdSecs} s.</p>
+      ${st.staminaSecs ? `<p><b>Running</b> faster than ${st.runKmh} km/h leaves footprints hunters can follow, and uses up your ${st.staminaSecs} s of stamina. Run out and keep running and you're out.</p>` : ''}
+      ${st.campMins ? `<p><b>Camping</b>: stay within ${st.campM} m of one spot for ${st.campMins} min and it burns. Hunters see you, and you must leave the burned area.</p>` : ''}
+      <p><b>You're exposed</b> (hunters see exactly where you are) if you leave the play area, miss a reveal, or close the game or lock your screen for ${st.darkSecs} s. Being outside the area or in a burned spot for ${st.graceSecs} s eliminates you, but you get the final say.</p>
+      ${st.missions ? `<p><b>Missions</b>: two yellow circles appear. One hider must step into one within ${fmtClock(st.missionStart * 1000)} and stay ${fmtClock(st.missionHold * 1000)}. Succeed and every hider gets ${st.missionPay} power-up${st.missionPay === 1 ? '' : 's'}; fail and every hider is shown to the hunters for a minute.</p>` : ''}
+      <p><b>Power-ups</b>: walk to a purple diamond to pick one up, then tap it in your bar to use it.</p>
+      <p class="small">Hiders:</p><ul class="small power-list">${list(hk)}</ul>
+      <p class="small">Hunters:</p><ul class="small power-list">${list(sk)}</ul>
+      <p><b>Sounds</b>: everything is announced out loud, so you can keep your phone in your pocket. Change it in Menu → Sound and voice.</p>
     </div>
     <div class="pick"><button class="btn btn-quiet" data-action="close-sheet">Got it</button></div>`);
 }
 
-function shuffleSeekers() {
+function soundSheet() {
+  const p = sound.getPrefs();
+  const row = (k, label, note) => `<label class="toggle"><span><b>${label}</b>${note ? `<small>${note}</small>` : ''}</span><input type="checkbox" data-pref="${k}" ${p[k] ? 'checked' : ''}></label>`;
+  openSheet(`<h2>Sound and voice</h2>
+    ${row('sound', 'Sound effects')}
+    ${row('voice', 'Spoken call-outs', 'Says what\'s happening, like "Reveal ready" or "Stop running"')}
+    ${row('vibrate', 'Vibration', 'Android only. iPhones don\'t let websites vibrate')}
+    ${row('silentSwitch', 'Play when the iPhone is on silent')}
+    <label class="field"><span>Volume</span><input type="range" min="0.2" max="1" step="0.1" value="${p.volume}" id="snd-vol"></label>
+    <p class="small muted">Turn your phone's volume up. Sounds play while the game is open, including with the screen dimmed.</p>
+    <div class="pick"><button class="btn btn-quiet" id="snd-test">Test</button><button class="btn btn-primary" data-action="close-sheet">Done</button></div>`);
+  $('#sheet').querySelectorAll('[data-pref]').forEach((el) => { el.onchange = () => sound.setPrefs({ [el.dataset.pref]: el.checked }); });
+  $('#snd-vol').oninput = (e) => sound.setPrefs({ volume: Number(e.target.value) });
+  $('#snd-test').onclick = () => { sound.unlock(); cue('reveal_ready', 'Reveal ready.', { buzz: [100, 60, 100] }); };
+}
+
+function shuffleHunters() {
   const ids = Object.keys(S.players);
   if (ids.length < 2) return toast('Need at least 2 players.', 'warn');
   const pick = ids[Math.floor(Math.random() * ids.length)];
   const upd = {};
   ids.forEach((u) => { upd[`${u}/role`] = u === pick ? 'seeker' : 'hider'; });
-  S.db.update(path('players'), upd).then(() => toast(`${name(pick)} is the seeker.`, 'seeker')).catch(() => toast('Couldn\'t shuffle teams.', 'bad'));
+  return S.db.update(path('players'), upd).then(() => { play('confirm'); toast(`${name(pick)} is the hunter.`, 'seeker'); }).catch(() => toast('Couldn\'t shuffle teams.', 'bad'));
 }
 
 function setArea(lat, lng, r) {
   return S.db.set(path('meta/area'), { lat: r6(lat), lng: r6(lng), r, mlon: Math.round(mPerDegLon(lat) * 100) / 100 }).catch(() => toast('Couldn\'t save the play area.', 'bad'));
 }
 
+// Hide Tag's presets.
+const PRESETS = {
+  standard: { label: 'Standard', v: {} },
+  quick: { label: 'Quick', v: { gameMins: 15, hideSecs: 120, revealCooldownSecs: 60, freezeCd: 60, missions: 0, campMins: 5 } },
+  long: { label: 'Long', v: { gameMins: 60, hideSecs: 300, revealCooldownSecs: 120, freezeCd: 180, campMins: 15 } },
+  casual: { label: 'Casual', v: { staminaSecs: 0, campMins: 0, shrinkPct: 100, missions: 0 } },
+};
+function applyPreset(k) {
+  if (!isHost() || !PRESETS[k]) return undefined;
+  const v = Object.assign({}, DEFAULTS, PRESETS[k].v);
+  const pool = S.meta.settings && S.meta.settings.pool;
+  if (pool) v.pool = pool;
+  return S.db.set(path('meta/settings'), v).then(() => toast(`${PRESETS[k].label} rules.`)).catch(() => toast('Couldn\'t save the rules.', 'bad'));
+}
+
 async function startGame() {
-  const seekers = Object.keys(S.players).filter((u) => S.players[u].role === 'seeker');
+  const hunters = Object.keys(S.players).filter((u) => S.players[u].role === 'seeker');
   if (!area()) return toast('Set the play area first.', 'warn');
-  if (!seekers.length) return toast('Pick at least one seeker.', 'warn');
-  if (seekers.length === Object.keys(S.players).length) return toast('Someone has to hide.', 'warn');
-  const upd = { 'meta/status': 'live', 'meta/startAt': S.db.TS, 'meta/endedAt': null };
-  Object.assign(upd, makeDrops(settings().powerups));
-  try { await S.db.update(`games/${S.code}`, upd); }
-  catch (e) { toast('Couldn\'t start the game.', 'bad'); }
+  if (!hunters.length) return toast('Pick at least one hunter.', 'warn');
+  if (hunters.length === Object.keys(S.players).length) return toast('Someone has to hide.', 'warn');
+  try {
+    await S.db.update(`games/${S.code}`, { 'meta/status': 'live', 'meta/startAt': S.db.TS, 'meta/endedAt': null });
+  } catch (e) { toast('Couldn\'t start the game.', 'bad'); return undefined; }
+  // Opening supplies (needs the game to be live first).
+  if (settings().supplies > 0) {
+    for (let i = 0; i < 3; i++) {
+      try { await S.db.update(`games/${S.code}`, openingCaches()); break; } catch (e) { await new Promise((r) => setTimeout(r, 800)); }
+    }
+  }
+  return undefined;
 }
 
 async function backToLobby() {
   try {
     if (S.meta.status === 'live') await S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS });
-    await S.db.update(`games/${S.code}`, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby', 'meta/endedAt': null });
-  }
-  catch (e) { toast('Couldn\'t reset the game.', 'bad'); }
+    await S.db.update(`games/${S.code}`, {
+      caught: null, circles: null, reveal: null, rcut: null, freeze: null, fcut: null, fz: null, prints: null,
+      caches: null, bag: null, fx: null, flare: null, snap: null, scan: null, mission: null, mhold: null, mfail: null,
+      'meta/status': 'lobby', 'meta/endedAt': null,
+    });
+  } catch (e) { toast('Couldn\'t reset the game.', 'bad'); }
 }
 
-/* ------------------------------------------------------------------ power-ups */
+/* ------------------------------------------------------------------ profile */
 
-function makeDrops(n) {
-  const a = area();
+const takenColours = () => {
   const out = {};
-  if (!a || !n) return out;
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  for (let i = 0; i < n; i++) {
-    let id = '';
-    for (let j = 0; j < 8; j++) id += 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)];
-    const p = randomPointNear(a, a.r * 0.85);
-    out['drops/' + id] = { lat: r6(p.lat), lng: r6(p.lng), h: pick(HIDER_POWERS), s: pick(SEEKER_POWERS) };
-  }
+  for (const [u, p] of Object.entries(S.players)) if (u !== S.uid) out[p.color] = p.name;
   return out;
-}
-
-// The organiser's phone tops up supply drops as they get collected.
-function respawnDrops() {
-  const want = settings().powerups;
-  if (!want || Date.now() - S.lastSpawn < RESPAWN_MS) return;
-  const left = Object.values(S.drops).filter((d) => !d.c).length;
-  S.lastSpawn = Date.now();
-  if (left >= want) return;
-  S.db.update(`games/${S.code}`, makeDrops(1)).catch(() => {});
-}
-
-async function autoPickup() {
-  if (!S.fix || S.fix.acc > MAX_ACC || S.picking) return;
-  const near = Object.entries(S.drops).find(([id, d]) => !d.c && distM(S.fix, d) <= PICKUP_M && Date.now() - (S.pickTried[id] || 0) > 6000);
-  if (!near) return;
-  if (myBag().length >= BAG_MAX) {
-    if (Date.now() - (S.bagFullAt || 0) > 30000) { S.bagFullAt = Date.now(); toast(`Your bag is full (${BAG_MAX}). Use a power-up to pick up more.`, 'warn'); }
-    return;
-  }
-  const [id, d] = near;
-  S.pickTried[id] = Date.now();
-  S.picking = true;
-  try {
-    await sendLocation(true, true);
-    const as = myRole();
-    await S.db.set(path(`drops/${id}/c`), { by: S.uid, as, t: S.db.TS });
-    const k = as === 'hider' ? d.h : d.s;
-    toast(`Picked up ${POWERS[k].icon} ${POWERS[k].name}. Tap it below to use it.`, as, 5000);
-    vibrate([80, 60, 80]);
-  } catch (e) { /* someone beat us to it, or GPS disagreed */ }
-  S.picking = false;
-}
-
-function powerSheet(id) {
-  const d = S.drops[id];
-  if (!d || !d.c) return;
-  const k = powerOf(d), P = POWERS[k];
-  if (d.c.as !== myRole()) {
-    openSheet(`<h2>${P.icon} ${esc(P.name)}</h2><p>This was a ${d.c.as} power-up, so you can't use it now you're a ${myRole()}.</p><div class="pick"><button class="btn btn-quiet" data-action="close-sheet">Close</button></div>`);
-    return;
-  }
-  const body = k === 'tracker'
-    ? `<p>${esc(P.desc)}</p><div class="pick">${activeHiders().map((u) => `<button class="btn btn-hider" data-action="use-power" data-id="${esc(id)}" data-uid="${esc(u)}"><span class="player-dot" style="background:${esc(S.players[u].color)}">${initial(name(u))}</span>Track ${esc(name(u))}</button>`).join('') || '<p>No hiders left.</p>'}<button class="btn btn-quiet" data-action="close-sheet">Not now</button></div>`
-    : `<p>${esc(P.desc)}</p><div class="pick"><button class="btn ${P.team === 'hider' ? 'btn-hider' : 'btn-primary'}" data-action="use-power" data-id="${esc(id)}">Use ${esc(P.name)}</button><button class="btn btn-quiet" data-action="close-sheet">Not now</button></div>`;
-  openSheet(`<h2>${P.icon} ${esc(P.name)}</h2>${body}`);
-}
-
-async function usePower(id, target) {
-  closeSheet();
-  const d = S.drops[id];
-  if (!d || !d.c || d.u) return;
-  const k = powerOf(d);
-  if (phase() !== 'hunt') { toast('Power-ups work once the hunt has started.', 'warn'); return; }
-  if (k === 'reveal' && S.reveal && S.db.now() - S.reveal.t < 3000) { toast('A reveal just happened. Try again in a moment.', 'warn'); return; }
-  const upd = { [`drops/${id}/u`]: S.db.TS };
-  if (k === 'reveal') upd.reveal = { n: (S.reveal ? S.reveal.n : 0) + 1, t: S.db.TS, by: S.uid, boost: id };
-  else if (k === 'freeze') {
-    await freshFix(4000, 5000);
-    const f = S.rawFix && Date.now() - S.rawFix.at < 5000 ? S.rawFix : S.fix;
-    if (!f) { toast('Waiting for GPS…', 'warn'); return; }
-    await sendLocation(true, true);
-    upd.freeze = { lat: r6(f.lat), lng: r6(f.lng), t: S.db.TS, by: S.uid, drop: id };
-  } else {
-    upd[`fx/${S.uid}/${k}`] = Object.assign({ t: S.db.TS, drop: id }, k === 'tracker' ? { target } : {});
-  }
-  try {
-    await S.db.update(`games/${S.code}`, upd);
-    vibrate(120);
-    if (k === 'tracker' || k === 'freeze') S.lastPoll = 0;
-    if (k === 'lookout') reconcileLocListeners();
-  } catch (e) {
-    toast(isDenied(e) ? `Couldn't use ${POWERS[k].name} right now.` : 'Couldn\'t reach the server.', 'bad');
-  }
-}
-
-function onFxChange() {
-  // Tell players about their own effects switching on.
-  const mine = S.fx[S.uid] || {};
-  const sig = Object.entries(mine).map(([k, f]) => k + ':' + f.drop).join();
-  if (S.seenFx !== null && sig !== S.seenFx) {
-    for (const [k, f] of Object.entries(mine)) {
-      if (!S.seenFx.includes(k + ':' + f.drop) && S.db.now() - f.t < 10000) {
-        const P = POWERS[k];
-        toast(k === 'tracker' ? `${P.icon} Tracking ${name(f.target)} for 15 s` : `${P.icon} ${P.name} on`, P.team);
-      }
-    }
-  }
-  S.seenFx = sig;
-}
-
-function onFreezeChange() {
-  const key = S.freeze ? S.freeze.drop : '';
-  if (S.seenFreeze === null) { S.seenFreeze = key; return; }
-  if (key && key !== S.seenFreeze && phase() === 'hunt') {
-    if (myRole() === 'hider' && frozenAt(S.fix)) { vibrate([600, 200, 600]); }
-    else if (myRole() === 'hider') toast(`${name(S.freeze.by)} used Freeze, but you were out of range.`, 'hider');
-    else { toast(`${name(S.freeze.by)} used Freeze: hiders within ${FREEZE_M} m are frozen and visible for 20 s.`, 'seeker', 5000); S.lastPoll = 0; }
-  }
-  S.seenFreeze = key;
-}
-
-function powersHTML() {
-  const me = S.uid;
-  const chips = [];
-  for (const k of ['lookout', 'shield', 'cloak', 'tracker']) {
-    if (!fxActive(me, k)) continue;
-    const left = fxLeft(me, k);
-    const label = k === 'cloak' ? `${Math.ceil(left / 60000)} min` : `${Math.ceil(left / 1000)} s`;
-    chips.push(`<span class="fx-chip ${POWERS[k].team}">${POWERS[k].icon} ${esc(POWERS[k].name)}${k === 'tracker' ? ': ' + esc(name(fxOf(me, k).target)) : ''} · ${label}</span>`);
-  }
-  const bag = myBag().map((b) => `<button class="power ${b.usable ? POWERS[b.kind].team : 'dead'}" data-action="power" data-id="${esc(b.id)}" aria-label="${esc(POWERS[b.kind].name)}"><span>${POWERS[b.kind].icon}</span>${esc(POWERS[b.kind].name)}</button>`);
-  return chips.concat(bag).join('');
-}
-
-/* ------------------------------------------------------------------ profile + map style */
+};
 
 function profileSheet() {
   const me = S.players[S.uid] || {};
@@ -922,7 +614,7 @@ function profileSheet() {
     <label class="field"><span>Name</span><input id="pf-name" maxlength="20" value="${esc(me.name || '')}" autocomplete="nickname"></label>
     <div class="field"><span>Colour</span><div class="colours" id="pf-colours" role="radiogroup" aria-label="Colour">${grid()}</div>
     <p class="small muted">Colours with a letter are taken.</p></div>
-    <div class="pick"><button class="btn btn-primary" id="pf-save">Save</button><button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`);
+    <div class="pick"><button class="btn btn-primary" id="pf-save">Save</button><button class="btn btn-quiet" data-action="sound">Sound and voice</button><button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`);
   $('#pf-colours').onclick = (e) => {
     const b = e.target.closest('[data-pc]');
     if (!b || b.disabled) return;
@@ -941,151 +633,6 @@ function profileSheet() {
   };
 }
 
-function mapStyleSheet() {
-  openSheet(`<h2>Map style</h2><div class="pick">${MAP_STYLES.map((m) =>
-    `<button class="btn ${m.id === S.mapStyle ? 'btn-ink' : 'btn-quiet'}" data-action="set-map-style" data-v="${m.id}">${m.label}</button>`).join('')}</div>`);
-}
-function setMapStyle(v) {
-  closeSheet();
-  S.mapStyle = v;
-  store('mapStyle', v);
-  Object.values(S.maps).forEach((m) => m.setStyle(v));
-  updateTools();
-}
-
-/* ------------------------------------------------------------------ sheets, toasts, overlays */
-
-function openSheet(html) {
-  document.body.classList.add('sheet-open');
-  $('#sheet').innerHTML = html;
-  $('#sheet').hidden = false;
-  $('#sheet-scrim').hidden = false;
-  $('#sheet-scrim').onclick = closeSheet;
-}
-function closeSheet() { $('#sheet').hidden = true; $('#sheet-scrim').hidden = true; document.body.classList.remove('sheet-open'); }
-function confirmSheet(title, body, okLabel, fn) {
-  openSheet(`<h2>${esc(title)}</h2><p>${esc(body)}</p><div class="pick"><button class="btn btn-primary" id="sheet-ok">${esc(okLabel)}</button><button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`);
-  $('#sheet-ok').onclick = () => { closeSheet(); fn(); };
-}
-function catchMenu(override) {
-  const hs = activeHiders();
-  const r = settings().tagRadius;
-  const list = hs.map((u) => `<button class="btn btn-hider" data-action="catch" data-how="${override ? 'host' : 'gps'}" data-uid="${esc(u)}"><span class="player-dot" style="background:${esc(S.players[u].color)}">${initial(name(u))}</span>${esc(name(u))}${fxActive(u, 'shield') ? ' <small>🛡️ shielded</small>' : ''}</button>`).join('');
-  const gps = S.fix ? `Your GPS: ±${S.fix.acc} m${S.fix.acc > MAX_ACC ? ' (too rough to count)' : ''}.` : 'No GPS fix yet.';
-  openSheet(override
-    ? `<h2>Organiser override</h2><p>Marks a hider as caught without the GPS check. Everyone sees that you used it.</p><div class="pick">${list || '<p>No hiders left.</p>'}<button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`
-    : `<h2>Who did you catch?</h2><p>Tag them first. It only counts if your phones are within ${r} m by GPS. ${gps}</p><div class="pick">${list || '<p>No hiders left.</p>'}${isHost() ? '<button class="btn btn-quiet" data-action="override-menu">Organiser override</button>' : ''}<button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`);
-}
-function toast(text, kind, ms) {
-  const el = document.createElement('div');
-  el.className = 'toast ' + (kind || '');
-  el.textContent = text;
-  $('#toasts').appendChild(el);
-  while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
-  setTimeout(() => el.remove(), ms || 3800);
-}
-let holdTimer = null;
-function showHold(html, ms, tone) {
-  const el = $('#hold');
-  el.dataset.kind = 'event';
-  el.dataset.tone = tone || '';
-  el.innerHTML = `<div>${html}</div>`;
-  el.hidden = false;
-  clearTimeout(holdTimer);
-  holdTimer = setTimeout(() => { el.hidden = true; el.dataset.kind = ''; el.dataset.tone = ''; scheduleRender(); }, ms);
-}
-
-/* ------------------------------------------------------------------ maps */
-
-const AREA_STYLE = { color: '#FF5B14', weight: 3, dashed: true, fill: 0.04 };
-const ACC_STYLE = { color: '#2D5BFF', weight: 1, lineOpacity: 0.45, fill: 0.1 };
-const REVEAL_STYLE = { color: '#FF5B14', weight: 2, fill: 0.16 };
-const FREEZE_STYLE = { color: '#2FA8E0', weight: 2, dashed: true, fill: 0.14 };
-
-function getMap(key, elId) {
-  if (!S.maps[key]) {
-    const m = new GameMap($(elId), {
-      engine: S.engine,
-      style: S.mapStyle,
-      onClick: (lat, lng) => { if (key === 'lobby' && isHost()) setArea(lat, lng, (area() && area().r) || 400); },
-      onUserMove: () => { if (key === 'game') { S.follow = false; updateTools(); } },
-    });
-    m._fitted = false;
-    S.maps[key] = m;
-    fitOnce(m);
-    updateTools();
-  }
-  return S.maps[key];
-}
-function pinHTML(cls, label, color, who) {
-  return `<div class="pin ${cls}"><span class="pin-dot" style="background:${esc(color)}">${initial(who || label)}</span>${label ? `<span class="pin-label">${esc(label)}</span>` : ''}</div>`;
-}
-function fitOnce(map) {
-  if (map._fitted) return;
-  const a = area();
-  if (a) { map.fitCircle(a.lat, a.lng, a.r); map._fitted = true; }
-  else if (S.fix) { map.setView(S.fix.lat, S.fix.lng, 16); map._fitted = true; }
-}
-function drawArea(map) {
-  const a = area();
-  if (a) map.circle('area', a.lat, a.lng, a.r, AREA_STYLE);
-}
-function drawMe(map) {
-  if (!S.fix) return;
-  map.circle('me-acc', S.fix.lat, S.fix.lng, S.fix.acc, ACC_STYLE);
-  const role = phase() === 'lobby' ? (S.players[S.uid] || {}).role : myRole();
-  map.pin('me', S.fix.lat, S.fix.lng, `<div class="pin me ${role || 'hider'}"><span class="me-dot"></span></div>`, 1000);
-}
-function distLabel(l) {
-  if (!S.fix || !l) return '';
-  const d = distM(S.fix, l);
-  return d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`;
-}
-function recentre() {
-  const m = S.maps.game;
-  if (!m || !S.fix) { toast('Waiting for GPS…', 'warn'); return; }
-  S.follow = true;
-  m.resetNorth();
-  m.setView(S.fix.lat, S.fix.lng, Math.max(m.zoom(), 17.5), true);
-  updateTools();
-}
-function toggle3D() {
-  const m = S.maps.game;
-  if (m) S.threeD = m.toggle3D();
-  updateTools();
-}
-function updateTools() {
-  const m = S.maps.game;
-  const label = (MAP_STYLES.find((x) => x.id === S.mapStyle) || MAP_STYLES[0]).label;
-  $('#lobby-style').textContent = `Map: ${label}`;
-  $('#threed-btn').hidden = !(m && m.supports3D);
-  $('#threed-btn').setAttribute('aria-pressed', String(!!S.threeD));
-  $('#follow-btn').setAttribute('aria-pressed', String(!!S.follow));
-}
-
-/* ------------------------------------------------------------------ rendering */
-
-function scheduleRender() {
-  if (S.renderQueued) return;
-  S.renderQueued = true;
-  // setTimeout rather than requestAnimationFrame: rAF stops entirely in background/hidden views.
-  setTimeout(() => { S.renderQueued = false; render(); }, 16);
-}
-
-function render() {
-  if (!S.code || !S.meta || !S.db) return;
-  document.body.classList.toggle('is-host', isHost());
-  const ph = phase();
-  if (ph === 'lobby') { show('lobby'); renderLobby(); }
-  else if (ph === 'hiding' || ph === 'hunt') { show('game'); renderGame(ph); }
-  else if (ph === 'ended') { show('end'); renderEnd(); }
-}
-
-function gpsLine() {
-  if (S.gpsErr) return S.gpsErr.code === 1 ? 'Location is blocked' : 'No GPS signal. Move into the open.';
-  if (!S.fix) return 'Waiting for GPS…';
-  return `GPS ±${S.fix.acc} m${S.fix.acc > MAX_ACC ? ' (rough)' : ''}`;
-}
 function gpsHelp() {
   openSheet(`<h2>Allow location</h2>
     <p>The game needs your location to work. After changing the setting, reload the page.</p>
@@ -1095,54 +642,15 @@ function gpsHelp() {
   $('#sheet-ok').onclick = () => location.reload();
 }
 
-function renderLobby() {
-  const host = isHost();
-  const ids = Object.keys(S.players).sort((a, b) => (S.players[a].joinedAt || 0) - (S.players[b].joinedAt || 0));
-  const seekers = ids.filter((u) => S.players[u].role === 'seeker').length;
-  $('#code-big').textContent = S.code;
-  $('#host-name').textContent = name(S.meta.host);
-  const me = S.players[S.uid] || {};
-  setHTML($('#profile-btn'), `<span class="player-dot" style="background:${esc(me.color)}">${initial(me.name)}</span><span>${esc(me.name || 'You')}</span>`);
-  $('#team-counts').textContent = `${seekers} seeker${seekers === 1 ? '' : 's'}, ${ids.length - seekers} hider${ids.length - seekers === 1 ? '' : 's'}`;
-  $('#team-hint').textContent = host ? 'Tap a team to switch it, or ⋯ for more.' : 'The organiser picks the teams.';
-  const now = S.db.now();
-  setHTML($('#player-list'), ids.map((u) => {
-    const p = S.players[u];
-    const loc = u === S.uid ? (S.fix && { t: now }) : S.locs[u];
-    const noGps = !(loc && now - loc.t < 15000);
-    const chip = `<button class="role-chip ${p.role}" data-action="toggle-role" data-uid="${esc(u)}" ${host ? '' : 'tabindex="-1"'}>${p.role === 'seeker' ? 'Seeker' : 'Hider'}</button>`;
-    const more = host ? `<button class="more-btn" data-action="player-menu" data-uid="${esc(u)}" aria-label="More options for ${esc(p.name)}">⋯</button>` : '';
-    return playerRow(u, (noGps && (present(u) || u === S.uid) ? '<span class="tag warn">No GPS</span>' : '') + chip + more);
-  }).join(''));
+/* ------------------------------------------------------------------ rendering */
 
-  const a = area();
-  $('#area-size').textContent = a ? `${a.r} m radius` : 'Not set';
-  $('#area-hint').textContent = host ? (a ? 'Tap the map to move the centre.' : 'Tap the map, or centre it on yourself.') : (a ? 'Set by the organiser. Stay inside the dashed line.' : 'The organiser hasn\'t set it yet.');
-  setHTML($('#area-radius'), `<div class="setting"><div class="setting-label">Size</div>${seg('area-radius', null, AREA_RADII, a ? a.r : null, (v) => (v >= 1000 ? v / 1000 + ' km' : v + ' m'), true)}</div>`);
-
-  const st = settings();
-  setHTML($('#settings'), host
-    ? SETTING_DEFS.map((d) => `<div class="setting"><div class="setting-label"><span>${d.label}</span>${d.note ? `<span class="muted">${d.note}</span>` : ''}</div>${seg('setting', d.k, d.opts, st[d.k], d.fmt, true)}</div>`).join('')
-    : `<dl class="rules-summary">${SETTING_DEFS.map((d) => `<div><dt>${d.label}</dt><dd>${d.fmt(st[d.k])}</dd></div>`).join('')}</dl>`);
-
-  setHTML($('#gps-status'), S.gpsErr && S.gpsErr.code === 1 ? `${esc(gpsLine())}. <button class="btn-link" data-action="gps-help">How to fix</button>` : esc(gpsLine()));
-  const hiders = ids.length - seekers;
-  $('#start').disabled = !(a && seekers && hiders);
-  $('#start').textContent = !a ? 'Set the play area to start' : !seekers ? 'Pick a seeker to start' : !hiders ? 'Someone has to hide' : 'Start game';
-
-  const map = getMap('lobby', '#lobby-map');
-  map.begin();
-  drawArea(map);
-  for (const u of ids) {
-    if (u === S.uid) continue;
-    const l = S.locs[u];
-    if (l) map.pin(u, l.lat, l.lng, pinHTML(S.players[u].role, S.players[u].name, S.players[u].color));
-  }
-  drawMe(map);
-  map.end();
-  fitOnce(map);
-  const ak = a ? `${a.lat},${a.lng},${a.r}` : '';
-  if (a && map._areaKey !== ak) { map._areaKey = ak; map.fitCircle(a.lat, a.lng, a.r); }
+function render() {
+  if (!S.code || !S.meta || !S.db) return;
+  document.body.classList.toggle('is-host', isHost());
+  const ph = phase();
+  if (ph === 'lobby') { show('lobby'); renderLobby(); }
+  else if (ph === 'hiding' || ph === 'hunt') { show('game'); renderGame(ph); fitOnce(S.maps.game); }
+  else if (ph === 'ended') { show('end'); renderEnd(); }
 }
 
 function seg(action, k, opts, cur, fmt, enabled) {
@@ -1150,115 +658,76 @@ function seg(action, k, opts, cur, fmt, enabled) {
     `<button data-action="${action}" ${k ? `data-k="${k}"` : ''} data-v="${v}" aria-pressed="${v === cur}" ${enabled ? '' : 'tabindex="-1"'}>${fmt(v)}</button>`).join('')}</div>`;
 }
 
-function renderGame(ph) {
+const openGroups = { Basics: true };
+function settingsHTML(host) {
   const st = settings();
-  const now = S.db.now();
-  const role = myRole();
-  const hs = startingHiders(), left = activeHiders();
-
-  // clock band
-  $('#clock').className = 'clock team-' + role;
-  $('#clock-time').textContent = fmtClock((ph === 'hiding' ? huntStart() : huntEnd()) - now);
-  $('#clock-phase').textContent = ph === 'hiding' ? 'Head start' : 'Hunt';
-  $('#clock-sub').dataset.action = 'roster';
-  $('#clock-sub').textContent = ph === 'hiding'
-    ? (role === 'seeker' ? 'Stay put. Hiders can see you.' : 'Get hidden. Seekers are waiting.')
-    : `${left.length} of ${hs.length} hider${hs.length === 1 ? '' : 's'} left`;
-
-  // hold screen for seekers during the head start
-  const hold = $('#hold');
-  if (hold.dataset.kind !== 'event') {
-    if (ph === 'hiding' && role === 'seeker') {
-      setHTML(hold, `<div><h2>Wait here</h2><p>Hiders are getting hidden. They can see you on their map until the hunt starts, so no sneaking off.</p><div class="big">${fmtClock(huntStart() - now)}</div><p>Keep this screen open.</p></div>`);
-      hold.hidden = false;
-    } else if (ph === 'hunt' && role === 'hider' && frozenAt(S.fix)) {
-      setHTML(hold, `<div><h2>❄️ Frozen</h2><p>${esc(name(S.freeze.by))} used Freeze. Stand still: seekers can see exactly where you are.</p><div class="big">${Math.ceil(freezeLeft() / 1000)}</div><p>seconds</p></div>`);
-      hold.hidden = false;
-      hold.classList.add('freeze');
-    } else { hold.hidden = true; hold.classList.remove('freeze'); }
+  const pool = st.pool || {};
+  if (!host) {
+    const rows = SETTING_GROUPS.flatMap((g) => g.items.filter((d) => d.basic)).map((d) => `<div><dt>${d.label}</dt><dd>${esc(d.fmt(st[d.k]))}</dd></div>`).join('');
+    const all = SETTING_GROUPS.map((g) => `<h4>${g.title}</h4><dl class="rules-summary">${g.items.map((d) => `<div><dt>${d.label}</dt><dd>${esc(d.fmt(st[d.k]))}</dd></div>`).join('')}</dl>`).join('');
+    return `<dl class="rules-summary">${rows}</dl><details class="rules-more"><summary>All rules</summary>${all}</details>`;
   }
-
-  // warnings
-  const myLoc = S.fix && { lat: S.fix.lat, lng: S.fix.lng };
-  const mineC = S.circles[S.uid];
-  let banner = null, danger = false;
-  if (S.gpsErr && S.gpsErr.code === 1) { banner = 'Location is blocked, so the game can\'t see where you are. Tap for how to fix it.'; danger = true; }
-  else if (S.gpsErr || !S.fix) banner = gpsLine();
-  else if (role === 'hider' && ph === 'hunt' && outside(myLoc)) { banner = 'You\'re outside the play area. Seekers can see exactly where you are.'; danger = true; }
-  else if (role === 'hider' && ph === 'hunt' && S.reveal && (!mineC || mineC.n !== S.reveal.n) && now - S.reveal.t > REVEAL_ANSWER_MS && !cloakedFor(S.uid, S.reveal)) { banner = 'Your phone missed the reveal, so seekers can see exactly where you are.'; danger = true; }
-  else if (outside(myLoc)) banner = 'You\'re outside the play area.';
-  else if (iosWakeLockBroken()) banner = 'This iPhone can\'t keep a Home Screen app awake. Open the game in Safari, or set Auto-Lock to Never.';
-  else if (!wake.active) banner = wake.supported ? 'Tap here to keep the screen on. If it locks, your location stops updating.' : 'Set Auto-Lock to Never while you play. If the screen locks, your location stops updating.';
-  const bEl = $('#banner');
-  bEl.hidden = !banner;
-  if (banner) { bEl.textContent = banner; bEl.className = 'banner' + (danger ? ' danger' : ''); bEl.dataset.action = S.gpsErr && S.gpsErr.code === 1 ? 'gps-help' : (wake.active ? '' : 'wake'); }
-
-  // dock
-  let edge = '';
-  const a = area();
-  if (a && S.fix) {
-    const d = Math.round(a.r - distM(S.fix, a, a.mlon));
-    edge = d >= 0 ? ` · ${d} m to edge` : ` · ${-d} m outside`;
-  }
-  const me = S.players[S.uid] || {};
-  setHTML($('#dock-status'), `<button class="me-btn" data-action="profile" aria-label="Edit your name and colour"><span class="player-dot" style="background:${esc(me.color)}">${initial(me.name)}</span><b>${role === 'seeker' ? 'Seeker' : 'Hiding'}</b><span class="muted">${esc(edge)}</span></button><span class="muted">${esc(gpsLine())}</span>`);
-  const pw = ph === 'hunt' ? powersHTML() : '';
-  setHTML($('#dock-powers'), pw);
-  $('#dock-powers').hidden = !pw;
-  let actions = '';
-  if (ph === 'hunt' && role === 'seeker') {
-    const next = nextRevealAt();
-    const ready = now >= next;
-    actions = `<button class="btn btn-primary" data-action="catch-menu">Catch</button>
-      <button class="btn btn-quiet" data-action="reveal" ${ready ? '' : 'disabled'}>${ready ? 'Reveal' : 'Reveal in ' + fmtClock(next - now)}</button>`;
-  } else if (ph === 'hunt' && role === 'hider') {
-    actions = `<button class="btn btn-quiet" data-action="self-caught">I was caught</button>`;
-  } else {
-    actions = `<button class="btn btn-quiet" disabled>Hunt starts in ${fmtClock(huntStart() - now)}</button>`;
-  }
-  setHTML($('#dock-actions'), actions);
-
-  // map
-  const map = getMap('game', '#game-map');
-  map.begin();
-  drawArea(map);
-  for (const [u, l] of Object.entries(S.locs)) {
-    if (!l || !S.players[u]) continue;
-    const stale = now - l.t > 30000;
-    const label = name(u) + (stale ? ` · ${Math.round((now - l.t) / 1000)} s ago` : (distLabel(l) ? ` · ${distLabel(l)}` : ''));
-    map.pin(u, l.lat, l.lng, pinHTML(`${roleOf(u)}${stale ? ' stale' : ''}`, label, S.players[u].color, name(u)), 100);
-  }
-  if (role === 'seeker') {
-    for (const [u, l] of Object.entries(S.exposed)) {
-      if (!S.players[u] || S.caught[u]) continue;
-      map.pin('x-' + u, l.lat, l.lng, pinHTML('exposed', `${name(u)} · ${distLabel(l)} · ${exposedReason(l, u)}`, S.players[u].color, name(u)), 500);
-    }
-  }
-  if (ph === 'hunt') {
-    for (const [id, d] of Object.entries(S.drops)) {
-      if (d.c) continue;
-      const near = S.fix && distM(S.fix, d) < 60;
-      map.pin('d-' + id, d.lat, d.lng, `<div class="pin drop${near ? ' near' : ''}"><span class="drop-gem"></span>${near ? `<span class="pin-label">${distLabel(d)}</span>` : ''}</div>`, 1);
-    }
-    if (freezeLeft() > 0) {
-      map.circle('freeze', S.freeze.lat, S.freeze.lng, FREEZE_M, FREEZE_STYLE, `<div class="circle-label freeze">❄️ ${Math.ceil(freezeLeft() / 1000)} s</div>`);
-    }
-  }
-  if (S.reveal && ph === 'hunt') {
-    for (const [u, c] of Object.entries(S.circles)) {
-      if (c.n !== S.reveal.n || S.caught[u]) continue;
-      if (role === 'hider' && u !== S.uid) continue;
-      const age = Math.round((now - c.t) / 60000);
-      const label = role === 'hider' ? 'Seekers see this' : `${name(u)}${age >= 1 ? `, ${age} min ago` : ''}`;
-      map.circle('rv-' + u, c.lat, c.lng, c.r, REVEAL_STYLE, `<div class="circle-label">${esc(label)}</div>`);
-    }
-  }
-  drawMe(map);
-  map.end();
-  fitOnce(map);
-  if (S.follow && S.fix && S.fix.at !== S.followedAt) { S.followedAt = S.fix.at; map.setView(S.fix.lat, S.fix.lng, null, true); }
+  const presets = `<div class="setting"><div class="setting-label"><span>Start from</span><span class="muted">Hide Tag presets</span></div><div class="seg">${Object.entries(PRESETS).map(([k, p]) => `<button data-action="preset" data-v="${k}">${p.label}</button>`).join('')}</div></div>`;
+  return presets + SETTING_GROUPS.map((g) => {
+    const body = g.items.map((d) => `<div class="setting"><div class="setting-label"><span>${d.label}</span>${d.note ? `<span class="muted">${d.note}</span>` : ''}</div>${seg('setting', d.k, d.opts, st[d.k], d.fmt, true)}</div>`).join('');
+    const poolHTML = g.title === 'Power-ups'
+      ? `<div class="setting"><div class="setting-label"><span>Power-ups in play</span><span class="muted">Tap to switch one off</span></div><div class="pool">${Object.entries(POWERS).map(([k, P]) => `<button data-action="pool" data-k="${k}" aria-pressed="${pool[k] !== false}" class="${P.side}">${P.icon} ${esc(P.name)}</button>`).join('')}</div></div>`
+      : '';
+    const summary = g.items.filter((d) => d.basic).map((d) => d.fmt(st[d.k])).join(' · ');
+    return `<details class="set-group" data-group="${g.title}" ${openGroups[g.title] ? 'open' : ''}><summary><b>${g.title}</b><span class="muted">${esc(summary)}</span></summary>${body}${poolHTML}</details>`;
+  }).join('');
 }
 
+function renderLobby() {
+  const host = isHost();
+  const ids = Object.keys(S.players).sort(byJoin);
+  const hunters = ids.filter((u) => S.players[u].role === 'seeker').length;
+  $('#code-big').textContent = S.code;
+  $('#host-name').textContent = name(S.meta.host);
+  const me = S.players[S.uid] || {};
+  setHTML($('#profile-btn'), `<span class="player-dot" style="background:${esc(me.color)}">${initial(me.name)}</span><span>${esc(me.name || 'You')}</span>`);
+  $('#team-counts').textContent = `${hunters} hunter${hunters === 1 ? '' : 's'}, ${ids.length - hunters} hider${ids.length - hunters === 1 ? '' : 's'}`;
+  $('#team-hint').textContent = host ? 'Tap a team to switch it, or ⋯ for more.' : 'The organiser picks the teams.';
+  const t = S.db.now();
+  setHTML($('#player-list'), ids.map((u) => {
+    const p = S.players[u];
+    const loc = u === S.uid ? (S.fix && { t }) : S.locs[u];
+    const noGps = !(loc && t - loc.t < 15000);
+    const chip = `<button class="role-chip ${p.role}" data-action="toggle-role" data-uid="${esc(u)}" ${host ? '' : 'tabindex="-1"'}>${p.role === 'seeker' ? 'Hunter' : 'Hider'}</button>`;
+    const more = host ? `<button class="more-btn" data-action="player-menu" data-uid="${esc(u)}" aria-label="More options for ${esc(p.name)}">⋯</button>` : '';
+    return playerRow(u, (noGps && (present(u) || u === S.uid) ? '<span class="tag warn">No GPS</span>' : '') + chip + more);
+  }).join(''));
+
+  const a = area();
+  $('#area-size').textContent = a ? `${a.r >= 1000 ? a.r / 1000 + ' km' : a.r + ' m'} radius` : 'Not set';
+  $('#area-hint').textContent = host ? (a ? 'Tap the map to move the centre.' : 'Tap the map, or centre it on yourself.') : (a ? 'Set by the organiser. Stay inside the dashed line.' : 'The organiser hasn\'t set it yet.');
+  setHTML($('#area-radius'), `<div class="setting"><div class="setting-label">Size</div>${seg('area-radius', null, AREA_RADII, a ? a.r : null, (v) => (v >= 1000 ? v / 1000 + ' km' : v + ' m'), true)}</div>`);
+
+  // Keep open/closed groups as the host left them.
+  $('#settings').querySelectorAll('details.set-group').forEach((d) => { openGroups[d.dataset.group] = d.open; });
+  setHTML($('#settings'), settingsHTML(host));
+
+  setHTML($('#gps-status'), S.gpsErr && S.gpsErr.code === 1 ? `${esc(gpsLine())}. <button class="btn-link" data-action="gps-help">How to fix</button>` : esc(gpsLine()));
+  const hiders = ids.length - hunters;
+  $('#start').disabled = !(a && hunters && hiders);
+  $('#start').textContent = !a ? 'Set the play area to start' : !hunters ? 'Pick a hunter to start' : !hiders ? 'Someone has to hide' : 'Start game';
+
+  const mp = getMap('lobby', '#lobby-map', (lat, lng) => { if (isHost()) setArea(lat, lng, (area() && area().r) || 500); });
+  mp.begin();
+  drawArea(mp, false);
+  for (const u of ids) {
+    if (u === S.uid) continue;
+    const l = S.locs[u];
+    if (l) mp.pin(u, l.lat, l.lng, pinHTML(S.players[u].role, S.players[u].name, S.players[u].color));
+  }
+  drawMe(mp);
+  mp.end();
+  fitOnce(mp);
+  const ak = a ? `${a.lat},${a.lng},${a.r}` : '';
+  if (a && mp._areaKey !== ak) { mp._areaKey = ak; mp.fitCircle(a.lat, a.lng, a.r); }
+}
+
+const WHY = { area: 'outside the play area', burn: 'in a burned spot', breath: 'out of breath', hold: 'moved while frozen' };
 function renderEnd() {
   const hs = startingHiders(), left = activeHiders();
   const hidersWin = left.length > 0;
@@ -1270,11 +739,10 @@ function renderEnd() {
   head.className = 'end-head ' + (hidersWin ? 'hider' : 'seeker');
   setHTML(head, hidersWin
     ? `<h1>Hiders win</h1><p>${esc(left.map(name).join(', '))} ${left.length === 1 ? 'was' : 'were'} never caught.</p>`
-    : `<h1>Seekers win</h1><p>${hs.length ? `All ${hs.length} hider${hs.length === 1 ? '' : 's'} caught in ${fmtClock(finish - t0)}.` : 'Nobody was left hiding.'}</p>`);
+    : `<h1>Hunters win</h1><p>${hs.length ? `All ${hs.length} hider${hs.length === 1 ? '' : 's'} out in ${fmtClock(finish - t0)}.` : 'Nobody was left hiding.'}</p>`);
 
-  // Scoreboard: catches for seekers, survival time for hiders.
   const score = {};
-  for (const [, c] of catches) if (c.how !== 'self') score[c.by] = (score[c.by] || 0) + 1;
+  for (const [, c] of catches) if (c.how === 'gps' || c.how === 'host') score[c.by] = (score[c.by] || 0) + 1;
   const top = Math.max(0, ...Object.values(score));
   const ids = Object.keys(S.players).sort((a, b) => (score[b] || 0) - (score[a] || 0) || byJoin(a, b));
   setHTML($('#end-board'), ids.map((u) => {
@@ -1282,33 +750,39 @@ function renderEnd() {
     const n = score[u] || 0;
     let line;
     if (S.players[u].role === 'hider' && !c) line = `<span class="tag hider">Never caught</span>`;
-    else if (c) line = `<span class="tag caught">Lasted ${fmtClock(c.t - t0)}</span>`;
-    else line = `<span class="tag seeker">Seeker</span>`;
+    else if (c) line = `<span class="tag caught">${c.how === 'out' ? 'Eliminated' : 'Lasted'} ${fmtClock(c.t - t0)}</span>`;
+    else line = `<span class="tag seeker">Hunter</span>`;
     const caughtN = n ? `<span class="tag">${n} catch${n === 1 ? '' : 'es'}${n === top && top > 0 ? ' 🏆' : ''}</span>` : '';
     return playerRow(u, caughtN + line);
   }).join(''));
 
   const rows = [`<li><time>0:00</time><span>The hunt started</span></li>`];
   catches.forEach(([h, c]) => {
-    const how = c.how === 'host' ? ' (organiser override)' : c.how === 'self' ? ' (owned up)' : '';
-    const who = c.how === 'self' ? `${esc(name(h))} was caught${how}` : `${esc(name(c.by))} caught ${esc(name(h))}${how}`;
+    let who;
+    if (c.how === 'out') who = `${esc(name(h))} was eliminated${c.why && WHY[c.why] ? ` (${WHY[c.why]})` : ''}`;
+    else if (c.how === 'quit') who = `${esc(name(h))} left the game`;
+    else if (c.how === 'self') who = `${esc(name(h))} was caught (owned up)`;
+    else who = `${esc(name(c.by))} caught ${esc(name(h))}${c.how === 'host' ? ' (organiser override)' : ''}`;
     rows.push(`<li><time>${fmtClock(c.t - t0)}</time><span>${who}</span></li>`);
   });
-  if (S.reveal) rows.push(`<li><time>&nbsp;</time><span>Seekers used ${S.reveal.n} reveal${S.reveal.n === 1 ? '' : 's'}</span></li>`);
+  if (S.reveal) rows.push(`<li><time>&nbsp;</time><span>Hunters used ${S.reveal.n} reveal${S.reveal.n === 1 ? '' : 's'}${S.freeze ? ` and ${S.freeze.n} freeze${S.freeze.n === 1 ? '' : 's'}` : ''}</span></li>`);
   if (hidersWin && S.meta.endedAt && S.meta.endedAt < huntEnd() - 2000) rows.push(`<li><time>${fmtClock(S.meta.endedAt - t0)}</time><span>The organiser ended the game early</span></li>`);
   else if (hidersWin) rows.push(`<li><time>${fmtClock(huntEnd() - t0)}</time><span>Time ran out</span></li>`);
   setHTML($('#end-log'), rows.join(''));
   $('#end-host').textContent = name(S.meta.host);
 
-  const map = getMap('end', '#end-map');
-  map.begin();
-  drawArea(map);
+  const mp = getMap('end', '#end-map');
+  mp.begin();
+  drawArea(mp, false);
   for (const [u, l] of Object.entries(S.locs)) {
-    if (l && S.players[u]) map.pin(u, l.lat, l.lng, pinHTML(roleOf(u), name(u), S.players[u].color));
+    if (l && S.players[u]) mp.pin(u, l.lat, l.lng, pinHTML(roleOf(u), name(u), S.players[u].color));
   }
-  drawMe(map);
-  map.end();
-  fitOnce(map);
+  drawMe(mp);
+  mp.end();
+  fitOnce(mp);
 }
+
+// For quick checks from the console.
+window.__mh = { S, say, once };
 
 boot();

@@ -18,6 +18,10 @@ const RULES = JSON.parse(readFileSync(join(ROOT_DIR, 'firebase/database.rules.js
 // RTDB rules have String.matches(regex); give JS strings the same method.
 // eslint-disable-next-line no-extend-native
 String.prototype.matches = function (re) { return re.test(String(this)); };
+// eslint-disable-next-line no-extend-native
+String.prototype.beginsWith = function (x) { return String(this).startsWith(x); };
+// eslint-disable-next-line no-extend-native
+String.prototype.endsWith = String.prototype.endsWith;
 
 let tree = {};
 let clockOffset = 0;
@@ -204,7 +208,7 @@ function notify() {
 }
 
 // ---------- static files ----------
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.webmanifest': 'application/manifest+json' };
 function serveStatic(req, res) {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p.endsWith('/')) p += 'index.html';
