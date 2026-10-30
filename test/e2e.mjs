@@ -28,7 +28,7 @@ let failures = 0;
 function check(cond, msg) { if (cond) console.log('  ok  ', msg); else { failures++; console.log('  FAIL', msg); } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function phone(label, pos) {
+async function phone(label, pos, url = '/index.html') {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
     geolocation: pos, permissions: ['geolocation'],
@@ -44,7 +44,7 @@ async function phone(label, pos) {
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
   page.label = label;
   page.ctx = ctx;
-  await page.goto(BASE + '/index.html');
+  await page.goto(BASE + url);
   return page;
 }
 const shot = (p, n) => p.screenshot({ path: `${SHOTS}/${n}.png` });
@@ -70,15 +70,30 @@ try {
   const code = (await text(ann, '#code-big')).trim();
   check(/^[A-Z2-9]{5}$/.test(code), `game created with code ${code}`);
 
-  const bob = await phone('Bob', at(40, 10));
+  console.log('invite');
+  await ann.click('.invite-btn');
+  check((await ann.locator('#sheet .qr svg').count()) === 1, 'invite sheet shows a QR code');
+  check((await text(ann, '#sheet .invite-code')).trim() === code, 'invite sheet shows the code');
+  await shot(ann, '01b-invite');
+  await ann.click('#sheet [data-action="close-sheet"]');
+
+  const bob = await phone('Bob', at(40, 10), `/index.html?code=${code}`);
+  await bob.waitForSelector('#home:not([hidden])');
+  check((await text(bob, '#join-form button')).includes(code), 'opening the QR link shows "Join" for that game');
+  await shot(bob, '01c-invited');
+  await bob.click('.home-help');
+  check((await text(bob, '#sheet')).includes('How to play'), 'how-to-play opens from the home screen');
+  await sleep(300); await shot(bob, '01d-help');
+  await bob.click('#sheet [data-action="close-sheet"]');
+  await bob.fill('#name', 'Bob');
+  await bob.click('#join-form button');
+  await bob.waitForSelector('#lobby:not([hidden])');
   const cat = await phone('Cat', at(200, 0));
-  for (const [p, n] of [[bob, 'Bob'], [cat, 'Cat']]) {
-    await p.waitForSelector('#home:not([hidden])');
-    await p.fill('#name', n);
-    await p.fill('#code', code);
-    await p.click('#join-form button');
-    await p.waitForSelector('#lobby:not([hidden])');
-  }
+  await cat.waitForSelector('#home:not([hidden])');
+  await cat.fill('#name', 'Cat');
+  await cat.fill('#code', code);
+  await cat.click('#join-form button');
+  await cat.waitForSelector('#lobby:not([hidden])');
   check(await waitFor(async () => (await ann.locator('.player').count()) === 3), 'host sees 3 players');
 
   // host setup
@@ -89,9 +104,11 @@ try {
   await ann.click('[data-action="setting"][data-k="hideSecs"][data-v="60"]');
   await ann.click('[data-action="setting"][data-k="revealCooldownSecs"][data-v="120"]');
   check(await waitFor(async () => (await text(bob, '#team-counts')).includes('1 seeker')), 'guests see team change');
-  check(await waitFor(async () => (await bob.locator('[data-k="hideSecs"][data-v="60"][aria-pressed="true"]').count()) === 1), 'guests see settings');
-  await waitFor(async () => (await text(ann, '#player-list')).split('GPS ok').length === 4, 6000, 'all GPS ok');
+  check(await waitFor(async () => (await text(bob, '#settings')).includes('1 min')), 'guests see settings');
+  await waitFor(async () => !(await text(ann, '#player-list')).includes('No GPS'), 6000, 'all GPS ok');
   await shot(ann, '02-lobby-host');
+  await bob.evaluate(() => document.querySelector('#settings').scrollIntoView({ block: 'center' }));
+  await shot(bob, '03b-lobby-guest-rules');
 
   console.log('profile and map style');
   const annColour = await ann.evaluate(() => getComputedStyle(document.querySelector('#profile-btn .player-dot')).backgroundColor);
@@ -145,6 +162,13 @@ try {
   check(await waitFor(async () => (await cat.locator('#game-map .pin.seeker').count()) >= 1, 8000), 'Lookout shows Cat the seeker');
   check(await waitFor(async () => (await cat.locator('.fx-chip').innerText()).includes('Lookout')), 'Lookout timer shows');
   await shot(cat, '13-lookout');
+  await cat.click('.menu-btn');
+  check((await text(cat, '#sheet')).includes('Leave game'), 'in-game menu has Leave');
+  await sleep(300); await shot(cat, '14-menu');
+  await cat.click('#sheet [data-action="roster"]');
+  check((await cat.locator('#sheet .player').count()) === 3, 'players sheet lists everyone');
+  await sleep(300); await shot(cat, '15-roster');
+  await cat.click('#sheet [data-action="close-sheet"]');
   await ann.click(`[data-action="catch"][data-uid="${catUid}"]`);
   check(await waitFor(async () => (await toasts(ann)).includes('Not counted')), 'catch from 200 m is refused');
   await shot(ann, '07-catch-refused');
@@ -195,10 +219,27 @@ try {
   await waitFor(async () => !(await bob.locator('#end').isHidden()));
   await shot(bob, '12-end');
   check((await text(bob, '#end-log')).includes('Ann caught Bob'), 'results list the catch');
-  await ann.click('[data-action="again"]');
+  console.log('organiser leaves on the results screen');
+  check(await bob.locator('#end [data-action="again"]').isHidden(), 'Bob can\'t go back to the lobby yet');
+  await ann.click('#end [data-action="leave"]');
+  check((await text(ann, '#sheet')).includes('will become the organiser'), 'leaving tells Ann who takes over');
+  await ann.click('#sheet-ok');
+  check(await waitFor(async () => !(await bob.locator('#end [data-action="again"]').isHidden()), 8000), 'Bob is now the organiser and can go back to the lobby');
+  check(await waitFor(async () => (await toasts(bob)).includes('now the organiser')), 'Bob is told he\'s the organiser');
+  await shot(bob, '12b-new-organiser');
+  await bob.click('#end [data-action="again"]');
   if (process.env.DEBUG) { await sleep(1000); console.log((await fetch(BASE + '/__test/log').then((r) => r.json())).filter((l) => l.op === 'update').slice(-3), await toasts(ann)); }
   check(await waitFor(async () => !(await cat.locator('#lobby').isHidden())), 'host takes everyone back to the lobby');
-  check((await text(cat, '#team-counts')).includes('1 seeker, 2 hiders'), 'teams reset to starting roles');
+  check((await text(cat, '#team-counts')).includes('0 seekers, 2 hiders'), 'back in the lobby without Ann');
+  check((await cat.locator('#player-list .player').count()) === 2, 'Ann has left the player list');
+  check((await text(cat, '#player-list')).includes('👑'), 'the new organiser is marked');
+
+  console.log('organiser goes quiet');
+  await bob.close();
+  await clearToasts(cat);
+  await advance(50000);
+  check(await waitFor(async () => (await toasts(cat)).includes('You\'re now the organiser'), 20000), 'Cat takes over when Bob\'s phone goes quiet');
+  check(await waitFor(async () => !(await cat.locator('#start').isHidden())), 'Cat can now start the game');
 } catch (e) {
   failures++;
   console.log('ERROR', e);

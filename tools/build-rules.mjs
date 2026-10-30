@@ -19,6 +19,8 @@
 
 import { writeFileSync } from 'node:fs';
 
+const one = (s) => s.replace(/\s+/g, ' ').trim();
+
 const FRESH_MS = 12000;      // a location counts as "live" for this long
 const MAX_ACC = 30;          // metres; worse GPS than this can't be used for a catch
 const REVEAL_ANSWER_MS = 20000;
@@ -73,12 +75,22 @@ const CONSUME = (id, kind, ng) => `(${DROP(id)}.child('c/by').val() == auth.uid 
    || (${DROP(id)}.child('c/as').val() == 'seeker' && ${SEEKER('auth.uid')} && ${DROP(id)}.child('s').val() == ${kind})))`;
 const FREEZE = `${G}.child('freeze')`;
 
+// ---- presence / organiser handover ----
+// Every phone writes seen/<uid> = server time every few seconds while the game is open.
+// If the organiser leaves, or their phone has been silent for HOST_GONE_MS, any player whose
+// own phone is live can take over as organiser.
+const HOST_GONE_MS = 45000;
+const PRESENT_MS = 20000;
+const SEEN = (u) => `${G}.child('seen/' + ${u})`;
+const HOST_GONE = one(`(!${G}.child('players/' + ${HOST}).exists()
+  || ${SEEN(HOST)}.val() < now - ${HOST_GONE_MS}
+  || (!${SEEN(HOST)}.exists() && ${M}.child('createdAt').val() < now - ${HOST_GONE_MS}))`);
+
 const num = (min, max) => ({ '.validate': `newData.isNumber() && newData.val() >= ${min} && newData.val() <= ${max}` });
 const str = (maxLen) => ({ '.validate': `newData.isString() && newData.val().length >= 1 && newData.val().length <= ${maxLen}` });
 const NO_OTHER = { $other: { '.validate': false } };
 const hostReset = `auth != null && !newData.exists() && auth.uid == ${HOST} && ${NOT_ACTIVE}`;
 
-const one = (s) => s.replace(/\s+/g, ' ').trim();
 
 const rules = {
   rules: {
@@ -90,13 +102,21 @@ const rules = {
 
         meta: {
           '.read': 'auth != null',
+          // The organiser edits the game. They can hand the role to another player in the game.
           '.write': one(`auth != null && (
             (!data.exists() && newData.child('host').val() == auth.uid)
-            || (data.exists() && data.child('host').val() == auth.uid))`),
+            || (data.exists() && data.child('host').val() == auth.uid
+                && (newData.child('host').val() == auth.uid
+                    || newData.parent().child('players/' + newData.child('host').val()).exists())))`),
           '.validate': one(`newData.hasChildren(['host', 'status', 'settings', 'createdAt'])
             && (newData.child('status').val() != 'live'
                 || (newData.child('area').exists() && newData.child('startAt').isNumber()))`),
-          host: { '.validate': `newData.isString() && (!data.exists() || newData.val() == data.val())` },
+          host: {
+            // Claim the organiser role when the current organiser has gone.
+            '.write': one(`auth != null && newData.val() == auth.uid && data.exists() && data.val() != auth.uid
+              && ${IN_GAME('auth.uid')} && ${SEEN('auth.uid')}.val() > now - ${PRESENT_MS} && ${HOST_GONE}`),
+            '.validate': 'newData.isString()',
+          },
           status: { '.validate': `newData.val() == 'lobby' || newData.val() == 'live' || newData.val() == 'ended'` },
           createdAt: { '.validate': `newData.isNumber()` },
           // The game clock can only ever be set to the server's own time.
@@ -128,14 +148,13 @@ const rules = {
         players: {
           '.read': 'auth != null',
           $uid: {
-            // Join/leave only in the lobby; name and colour can change any time.
-            // Only the organiser picks teams.
+            // Join only in the lobby; leave any time; name and colour can change any time.
+            // Only the organiser picks teams (or removes people) in the lobby.
             '.write': one(`auth != null && (
               (${LOBBY} && auth.uid == ${HOST})
+              || (auth.uid == $uid && !newData.exists())
               || (auth.uid == $uid && data.exists() && newData.exists() && newData.child('role').val() == data.child('role').val())
-              || (${LOBBY} && auth.uid == $uid && (
-                   (!data.exists() && newData.child('role').val() == 'hider')
-                   || !newData.exists())))`),
+              || (${LOBBY} && auth.uid == $uid && !data.exists() && newData.child('role').val() == 'hider'))`),
             '.validate': `newData.hasChildren(['name', 'role', 'color', 'joinedAt'])`,
             name: str(20),
             role: { '.validate': `newData.val() == 'hider' || newData.val() == 'seeker'` },
@@ -164,7 +183,7 @@ const rules = {
                             && !(${FX('$uid', 'cloak')}.child('t').val() > ${G}.child('reveal/t').val() - ${POWER_MS.cloak}))
                         || (${FX('auth.uid', 'tracker')}.child('target').val() == $uid && ${ACTIVE('auth.uid', 'tracker')})
                         || (${FREEZE}.child('t').val() > now - ${FREEZE_MS} && ${DIST2('data', FREEZE)} <= ${FREEZE_M * FREEZE_M}))))))`),
-            '.write': `auth != null && auth.uid == $uid && ${IN_GAME('$uid')} && ${STATUS} != 'ended'`,
+            '.write': `auth != null && auth.uid == $uid && ((${IN_GAME('$uid')} && ${STATUS} != 'ended') || !newData.exists())`,
             '.validate': `newData.hasChildren(['lat', 'lng', 'acc', 't']) && newData.child('t').val() == now`,
             lat: num(-90, 90),
             lng: num(-180, 180),
@@ -240,6 +259,14 @@ const rules = {
             r: { '.validate': 'newData.isNumber()' },
             t: { '.validate': 'newData.isNumber()' },
             ...NO_OTHER,
+          },
+        },
+
+        seen: {
+          '.read': `auth != null && ${IN_GAME('auth.uid')}`,
+          $uid: {
+            '.write': `auth != null && auth.uid == $uid && (${IN_GAME('$uid')} || !newData.exists())`,
+            '.validate': 'newData.val() == now',
           },
         },
 
@@ -322,6 +349,12 @@ const rules = {
     },
   },
 };
+
+// Firebase silently refuses .validate rules that use auth or newData.parent().
+JSON.stringify(rules, (k, v) => {
+  if (k === '.validate' && typeof v === 'string' && /\bauth\b|parent\(\)/.test(v)) throw new Error(`.validate can't use auth or parent(): ${v.slice(0, 80)}`);
+  return v;
+});
 
 // Firebase silently refuses rules whose regexes use groups or alternation (the deploy
 // "succeeds" but the old rules stay live), so refuse to build them.

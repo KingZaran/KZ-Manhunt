@@ -33,14 +33,19 @@ let enginePromise = null;
 export function loadEngine() {
   if (!enginePromise) {
     enginePromise = (async () => {
-      if (new URLSearchParams(location.search).get('map') === 'leaflet' || !hasWebGL2()) return 'leaflet';
+      // Leaflet (the fallback) is only downloaded when it's needed.
+      const leaflet = async () => {
+        loadCss('vendor/leaflet/leaflet.css');
+        await loadScript('vendor/leaflet/leaflet.js');
+        return 'leaflet';
+      };
+      if (new URLSearchParams(location.search).get('map') === 'leaflet' || !hasWebGL2()) return leaflet();
       try {
         loadCss(ML_CDN + 'maplibre-gl.css');
         await Promise.race([loadScript(ML_CDN + 'maplibre-gl.js'), new Promise((_, rej) => setTimeout(rej, 8000))]);
-        return window.maplibregl ? 'gl' : 'leaflet';
-      } catch (e) {
-        return 'leaflet';
-      }
+        if (window.maplibregl) return 'gl';
+      } catch (e) { /* fall through */ }
+      return leaflet();
     })();
   }
   return enginePromise;

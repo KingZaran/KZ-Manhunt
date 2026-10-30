@@ -57,6 +57,9 @@ The free Spark plan is far more than a group of friends needs.
 - On older iPhones (iOS below 18.4), play in a **Safari tab**, not from a Home Screen icon. Those iOS versions can't keep a Home Screen web app awake.
 - GPS is roughly ±5–15 m outdoors. The game smooths it, so people standing still don't drift around the map. For catches and pick-ups it uses your latest reading. If a catch is refused even though you're touching, stand together for a few seconds and try again.
 - Tap your name (in the lobby, or bottom-left in a game) to change your name or colour. Each player has their own colour.
+- In the lobby, tap **Invite** to show a QR code. Friends scan it with their phone camera to open the game with the code filled in.
+- **Organiser handover:** if the organiser leaves, they hand over to the next player. If their phone goes quiet for 45 s, the longest-standing player whose phone is online takes over automatically. That works on any screen, including results, so someone can always take everyone back to the lobby. The organiser can also hand over manually from a player's ⋯ menu.
+- The ☰ menu in a game has the player list, how to play, and Leave. Anyone can leave at any time.
 - Use the layers button to switch the map between Light, Dark and Satellite. The 3D button tilts the map.
 
 ## Development

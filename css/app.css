@@ -78,7 +78,7 @@ button { font: inherit; color: inherit; }
 /* ---------- home ---------- */
 .screen { min-height: 100%; }
 .home { display: flex; flex-direction: column; }
-.home-hero { color: var(--line); height: 34vh; min-height: 200px; position: relative; overflow: hidden; }
+.home-hero { color: var(--line); height: 24vh; min-height: 150px; position: relative; overflow: hidden; }
 .contours { position: absolute; inset: 0; width: 100%; height: 100%; }
 .contours .zone { stroke: var(--blaze); }
 .contours .dot-h { fill: var(--cobalt); }
@@ -306,3 +306,63 @@ body.is-host .guest-only { display: none !important; }
 .circle-label.freeze { background: #2FA8E0; }
 .hold.freeze { background: rgba(23, 92, 130, 0.88); }
 @media (prefers-reduced-motion: reduce) { .pin.drop.near .drop-gem { animation: none; } }
+
+/* ---------- home: invite vs. normal ---------- */
+.home-actions { display: flex; flex-direction: column; }
+.home-actions .join { margin-top: 0; }
+body:not(.has-invite) #create { order: -2; }
+body:not(.has-invite) .or { order: -1; }
+body:not(.has-invite) .invite-only, body.has-invite .no-invite { display: none; }
+.has-invite #join-form .btn { background: var(--blaze); color: var(--blaze-ink); }
+.has-invite #create { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); min-height: 48px; font-size: 18px; }
+.has-invite .tagline strong { font-family: var(--display); font-size: 1.25em; letter-spacing: 0.08em; color: var(--ink); }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; margin: 14px 0; }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.home-help { display: block; margin: 18px auto 0; }
+.home-actions .error { order: 0; margin-top: 6px; }
+
+/* ---------- lobby: invite ---------- */
+.code-block { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.invite-btn { min-height: 38px; font-size: 17px; padding: 0 14px; gap: 6px; }
+.qr { background: #fff; border-radius: var(--radius-l); padding: 10px; width: min(78vw, 300px); margin: 4px auto 10px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.invite-code { text-align: center; font: 700 52px/1 var(--display); letter-spacing: 0.16em; margin: 4px 0 16px; padding-left: 0.16em; }
+
+/* ---------- players ---------- */
+.player .tag, .tag {
+  display: inline-flex; align-items: center; white-space: nowrap; border-radius: 999px; padding: 3px 9px;
+  font: 600 13px/1.2 var(--body); background: var(--paper); color: var(--ink);
+}
+.tag.seeker { background: var(--blaze); color: #fff; }
+.tag.hider { background: var(--cobalt); color: #fff; }
+.tag.caught { background: var(--line); color: var(--ink); }
+.tag.warn { background: var(--signal); color: #1A1400; }
+.player { flex-wrap: nowrap; }
+.player > .tag + .tag, .player > .tag + .role-chip { margin-left: -4px; }
+.player-dot.away { opacity: 0.4; }
+.crown { margin-right: 4px; font-size: 14px; }
+.more-btn {
+  appearance: none; border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  width: 34px; height: 34px; border-radius: 50%; font-size: 22px; line-height: 1; margin-left: -6px;
+}
+.more-btn:active { background: var(--paper); }
+.sheet .players { margin: 0 0 14px; }
+.rules-summary { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.rules-summary div { min-width: 0; }
+.rules-summary dt { font-size: 13px; color: var(--muted); }
+.rules-summary dd { margin: 0; font: 700 19px var(--display); }
+.panel-head .btn-link { font-size: 15px; }
+
+/* ---------- game header ---------- */
+.clock-meta { flex: 1; }
+.clock-sub { appearance: none; border: 0; background: none; color: inherit; padding: 0; font: inherit; font-size: 14px; opacity: 0.9; text-align: left; cursor: pointer; }
+.menu-btn { appearance: none; border: 0; background: rgba(255,255,255,0.18); color: inherit; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; flex: none; }
+.banner { padding: 8px 16px; font-size: 15px; }
+.hold[data-tone="seeker"] { background: rgba(255, 91, 20, 0.92); }
+.hold[data-tone="hider"] { background: rgba(45, 91, 255, 0.92); }
+.help p { margin: 0 0 12px; color: var(--ink); }
+.help b { font-weight: 600; }
+
+/* While a sheet is open, toasts move to the top so they don't cover its buttons. */
+body.sheet-open .toasts { top: calc(12px + var(--safe-top)); bottom: auto; flex-direction: column; }
+.clock-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

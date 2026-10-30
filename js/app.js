@@ -1,6 +1,7 @@
-import { connect, isConfigured, isDenied } from './fb.js?v=mvu25efv';
-import { GameMap, loadEngine, MAP_STYLES } from './map.js?v=mvu25efv';
-import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate, GpsFilter, nudgeLocation } from './geo.js?v=mvu25efv';
+import { connect, isConfigured, isDenied } from './fb.js?v=mvusup4b';
+import { GameMap, loadEngine, MAP_STYLES } from './map.js?v=mvusup4b';
+import qrcode from '../vendor/qrcode/qrcode.js';
+import { distM, mPerDegLon, randomPointNear, watchLocation, WakeLock, iosWakeLockBroken, vibrate, GpsFilter, nudgeLocation } from './geo.js?v=mvusup4b';
 
 /* ------------------------------------------------------------------ constants */
 
@@ -16,6 +17,9 @@ const REVEAL_ANSWER_MS = 20000;  // must match tools/build-rules.mjs
 const SEND_EVERY = 2500;         // min gap between location uploads
 const HEARTBEAT = 4000;          // re-send last fix so we stay "live" while standing still
 const POLL_EVERY = 4000;         // seekers check for exposed hiders
+const SEEN_EVERY = 8000;         // presence heartbeat
+const PRESENT_MS = 20000;        // must match tools/build-rules.mjs
+const HOST_GONE_MS = 45000;      // must match tools/build-rules.mjs
 
 const SETTING_DEFS = [
   { k: 'hideSecs', label: 'Head start', opts: [60, 120, 180, 300, 600], fmt: (v) => v / 60 + ' min', note: 'Seekers wait while hiders hide' },
@@ -73,6 +77,7 @@ const S = {
   maps: {}, tick: null, renderQueued: false, threeD: false, follow: false, engine: 'leaflet', endSent: false,
   drops: {}, fx: {}, freeze: null, pickTried: {}, lastSpawn: 0, seenFreeze: null, seenFx: null,
   mapStyle: load('mapStyle') || 'light',
+  seen: {}, lastSeenSent: 0, lastHost: null, claiming: false, leaving: false,
 };
 const wake = new WakeLock(() => scheduleRender());
 S.filter = new GpsFilter();
@@ -82,7 +87,9 @@ const settings = () => Object.assign({}, DEFAULTS, (S.meta && S.meta.settings) |
 const huntStart = () => S.meta.startAt + settings().hideSecs * 1000;
 const huntEnd = () => huntStart() + settings().gameMins * 60000;
 const isHost = () => !!S.meta && S.meta.host === S.uid;
-const name = (u) => (S.players[u] ? S.players[u].name : 'Someone');
+// Remember names so history still reads right after someone leaves.
+const knownNames = {};
+const name = (u) => (S.players[u] ? S.players[u].name : knownNames[u] || 'a player who left');
 const roleOf = (u) => { const p = S.players[u]; if (!p) return null; return p.role === 'seeker' || S.caught[u] ? 'seeker' : 'hider'; };
 const myRole = () => roleOf(S.uid);
 const startingHiders = () => Object.keys(S.players).filter((u) => S.players[u].role === 'hider');
@@ -105,6 +112,20 @@ const takenColours = () => {
   for (const [u, p] of Object.entries(S.players)) if (u !== S.uid) out[p.color] = p.name;
   return out;
 };
+const present = (u) => !!S.seen[u] && S.db.now() - S.seen[u] < PRESENT_MS;
+const byJoin = (a, b) => (S.players[a].joinedAt || 0) - (S.players[b].joinedAt || 0);
+// Who should take over as organiser: the longest-standing player whose phone is live.
+function successor(exclude) {
+  const ids = Object.keys(S.players).filter((u) => u !== exclude).sort(byJoin);
+  return ids.find(present) || ids[0] || null;
+}
+function hostGone() {
+  const h = S.meta && S.meta.host;
+  if (!h) return false;
+  if (!S.players[h]) return true;
+  const t = S.seen[h];
+  return t ? S.db.now() - t > HOST_GONE_MS : S.db.now() - (S.meta.createdAt || 0) > HOST_GONE_MS;
+}
 const outside = (loc) => { const a = area(); return !!(a && loc && distM(loc, a, a.mlon) > a.r); };
 
 function phase() {
@@ -199,7 +220,14 @@ function setupHome() {
     busy($('#join-form button'), false);
   });
   const params = new URLSearchParams(location.search);
-  if (params.get('code')) $('#code').value = params.get('code').toUpperCase();
+  const invite = (params.get('code') || '').toUpperCase();
+  if (/^[A-Z2-9]{5}$/.test(invite)) {
+    $('#code').value = invite;
+    document.body.classList.add('has-invite');
+    $('#invite-code').textContent = invite;
+    $('#join-form button').textContent = `Join ${invite}`;
+    if (!nameEl.value) setTimeout(() => nameEl.focus(), 300);
+  }
 }
 function homeError(t) { $('#home-error').textContent = t; }
 function busy(btn, on) { btn.disabled = on; }
@@ -248,12 +276,17 @@ function enterGame(code) {
   history.replaceState(null, '', location.pathname);
   const on = (p, cb) => S.subs.push(S.db.on(path(p), cb, (e) => console.warn('listen failed', p, e)));
   on('meta', (v) => {
+    if (S.leaving) return;
     if (!v) { toast('That game was closed.', 'bad'); leaveGame(true); return; }
-    S.meta = v; scheduleRender();
+    S.meta = v;
+    onHostChange();
+    scheduleRender();
   });
   on('players', (v) => {
+    if (S.leaving) return;
     S.players = v || {};
-    if (S.meta && !S.players[S.uid] && S.code) { toast('You were removed from the game.', 'bad'); leaveGame(true); return; }
+    for (const [u, p] of Object.entries(S.players)) knownNames[u] = p.name;
+    if (S.meta && !S.players[S.uid] && S.code) { toast('The organiser removed you from the game.', 'bad'); leaveGame(true); return; }
     scheduleRender();
   });
   on('caught', (v) => { S.caught = v || {}; onCaughtChange(); scheduleRender(); });
@@ -262,6 +295,9 @@ function enterGame(code) {
   on('drops', (v) => { S.drops = v || {}; scheduleRender(); });
   on('fx', (v) => { S.fx = v || {}; onFxChange(); scheduleRender(); });
   on('freeze', (v) => { S.freeze = v; onFreezeChange(); scheduleRender(); });
+  on('seen', (v) => { S.seen = v || {}; scheduleRender(); });
+  S.leaving = false;
+  sendSeen();
 
   S.filter.reset();
   S.stopGps = watchLocation(
@@ -274,13 +310,21 @@ function enterGame(code) {
 
 function leaveGame(silent) {
   const code = S.code;
-  if (!silent && code && S.meta && S.meta.status === 'lobby') S.db.remove(`games/${code}/players/${S.uid}`).catch(() => {});
+  S.leaving = true;
   S.subs.forEach((u) => u()); S.subs = [];
+  if (!silent && code && S.players[S.uid]) {
+    const upd = { [`players/${S.uid}`]: null, [`locs/${S.uid}`]: null, [`seen/${S.uid}`]: null };
+    const next = isHost() ? successor(S.uid) : null;
+    if (next) upd['meta/host'] = next;
+    S.db.update(`games/${code}`, upd).catch((e) => console.warn('leave failed', e));
+  }
   Object.values(S.locSubs).forEach((u) => u()); S.locSubs = {};
   if (S.stopGps) S.stopGps();
   clearInterval(S.tick);
   Object.values(S.maps).forEach((m) => m.remove()); S.maps = {};
-  Object.assign(S, { code: null, meta: null, players: {}, caught: {}, reveal: null, circles: {}, locs: {}, locFail: {}, exposed: {}, seenCaught: null, seenReveal: null, lastPhase: null, answering: null, endSent: false, drops: {}, fx: {}, freeze: null, pickTried: {}, seenFreeze: null, seenFx: null });
+  closeSheet();
+  $('#hold').hidden = true;
+  Object.assign(S, { seen: {}, lastHost: null, code: null, meta: null, players: {}, caught: {}, reveal: null, circles: {}, locs: {}, locFail: {}, exposed: {}, seenCaught: null, seenReveal: null, lastPhase: null, answering: null, endSent: false, drops: {}, fx: {}, freeze: null, pickTried: {}, seenFreeze: null, seenFx: null });
   store('game', null);
   show('home');
 }
@@ -300,6 +344,8 @@ function tick() {
   // iPhones can stop sending updates while you stand still; ask for a fresh fix so you don't look offline.
   if (Date.now() - (S.rawAt || 0) > 12000 && Date.now() - (S.nudgedAt || 0) > 12000) { S.nudgedAt = Date.now(); nudgeLocation(onRawFix); }
   if (Date.now() - S.lastSent > HEARTBEAT) sendLocation(true);
+  if (Date.now() - S.lastSeenSent > SEEN_EVERY) sendSeen();
+  maybeClaimHost();
   reconcileLocListeners();
   if (ph === 'hunt' && myRole() === 'seeker' && Date.now() - S.lastPoll > POLL_EVERY) pollExposed();
   if (ph === 'hunt' && myRole() === 'hider') answerReveal();
@@ -314,8 +360,38 @@ function tick() {
   scheduleRender();
 }
 
+function sendSeen() {
+  if (!S.code || S.leaving) return;
+  S.lastSeenSent = Date.now();
+  S.db.set(path('seen/' + S.uid), S.db.TS).catch(() => {});
+}
+
+async function maybeClaimHost() {
+  if (S.claiming || !S.players[S.uid] || isHost() || !hostGone()) return;
+  if (successor(S.meta.host) !== S.uid || !present(S.uid)) return;
+  S.claiming = true;
+  try { await S.db.set(path('meta/host'), S.uid); } catch (e) { /* someone else got there first, or the organiser is back */ }
+  S.claiming = false;
+}
+
+function onHostChange() {
+  const h = S.meta.host;
+  if (S.lastHost && h !== S.lastHost) {
+    if (h === S.uid) {
+      const ended = phase() === 'ended';
+      toast(`You're now the organiser${ended ? '. You can take everyone back to the lobby.' : '.'}`, 'seeker', 6000);
+      vibrate([100, 60, 100]);
+    } else toast(`${name(h)} is now the organiser.`);
+  }
+  S.lastHost = h;
+}
+
 function onPhaseChange(from, to) {
-  if (to === 'hunt') { toast('The hunt is on.', myRole() === 'seeker' ? 'seeker' : 'hider'); vibrate([300, 120, 300]); }
+  if (to === 'hunt') {
+    const seeker = myRole() === 'seeker';
+    showHold(seeker ? '<h2>Go!</h2><p>The hunt is on. Find the hiders.</p>' : '<h2>They\'re coming</h2><p>The hunt is on. Stay hidden.</p>', 2200, seeker ? 'seeker' : 'hider');
+    vibrate([300, 120, 300]);
+  }
   if (to === 'hiding') vibrate(200);
   if (to === 'ended') vibrate([200, 100, 200, 100, 400]);
   if (to === 'lobby') { S.endSent = false; S.answering = null; S.exposed = {}; S.seenCaught = null; S.seenReveal = null; S.pickTried = {}; S.seenFreeze = null; S.seenFx = null; }
@@ -327,6 +403,8 @@ function onVisibility() {
   const away = S.hiddenAt ? Date.now() - S.hiddenAt : 0;
   S.hiddenAt = null;
   if (!S.code || !S.meta) return;
+  sendSeen();
+  nudgeLocation(onRawFix);
   sendLocation(true);
   if (phase() === 'hunt' && myRole() === 'hider' && away > settings().darkSecs * 1000) {
     toast(`You were away for ${Math.round(away / 1000)} s, so seekers could see where you were.`, 'warn', 6000);
@@ -515,8 +593,17 @@ async function onClick(e) {
   const a = el.dataset.action;
   const u = el.dataset.uid;
   switch (a) {
-    case 'leave': return confirmSheet('Leave this game?', S.meta && S.meta.status === 'lobby' ? 'You can rejoin with the code while it\'s in the lobby.' : 'You won\'t be able to rejoin until the organiser takes everyone back to the lobby.', 'Leave', () => leaveGame(false));
+    case 'leave': return leaveSheet();
     case 'share-code': return shareCode();
+    case 'invite': return inviteSheet();
+    case 'copy-link': return copyLink();
+    case 'menu': return menuSheet();
+    case 'roster': return rosterSheet();
+    case 'help': return helpSheet();
+    case 'player-menu': return playerSheet(u);
+    case 'make-host': closeSheet(); return S.db.set(path('meta/host'), u).catch(() => toast('Couldn\'t hand over the organiser role.', 'bad'));
+    case 'set-role': closeSheet(); return S.db.set(path(`players/${u}/role`), el.dataset.v).catch(() => toast('Couldn\'t change teams.', 'bad'));
+    case 'kick': return confirmSheet(`Remove ${name(u)}?`, 'They can rejoin with the code while you\'re in the lobby.', 'Remove', () => S.db.remove(path('players/' + u)).catch(() => toast('Couldn\'t remove them.', 'bad')));
     case 'toggle-role':
       if (!isHost()) return;
       return S.db.set(path(`players/${u}/role`), S.players[u].role === 'seeker' ? 'hider' : 'seeker').catch(() => toast('Couldn\'t change teams.', 'bad'));
@@ -558,13 +645,106 @@ async function onClick(e) {
   }
 }
 
+const inviteUrl = () => `${location.origin}${location.pathname}?code=${S.code}`;
+
 async function shareCode() {
-  const url = `${location.origin}${location.pathname}?code=${S.code}`;
   const text = `Join my Manhunt game: code ${S.code}`;
   try {
-    if (navigator.share) await navigator.share({ title: 'Manhunt', text, url });
-    else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Invite link copied.'); }
+    if (navigator.share) await navigator.share({ title: 'Manhunt', text, url: inviteUrl() });
+    else copyLink();
   } catch (e) { /* cancelled */ }
+}
+async function copyLink() {
+  try { await navigator.clipboard.writeText(inviteUrl()); toast('Invite link copied.'); }
+  catch (e) { toast(inviteUrl()); }
+}
+
+function qrSvg(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 6, margin: 3, scalable: true, alt: 'QR code to join', title: 'Scan to join' });
+}
+
+function inviteSheet() {
+  openSheet(`<h2>Invite friends</h2>
+    <p>Scan with a phone camera, or enter the code on the Manhunt home screen.</p>
+    <div class="qr">${qrSvg(inviteUrl())}</div>
+    <div class="invite-code" aria-label="Join code">${esc(S.code)}</div>
+    <div class="pick">
+      ${navigator.share ? '<button class="btn btn-primary" data-action="share-code">Share invite link</button>' : ''}
+      <button class="btn btn-quiet" data-action="copy-link">Copy link</button>
+      <button class="btn btn-quiet" data-action="close-sheet">Done</button>
+    </div>`);
+}
+
+function leaveSheet() {
+  const ph = phase();
+  const next = isHost() ? successor(S.uid) : null;
+  const handover = next ? ` ${name(next)} will become the organiser.` : '';
+  const body = ph === 'lobby'
+    ? `You can rejoin with the code while the game is in the lobby.${handover}`
+    : ph === 'ended'
+      ? `You can rejoin when everyone goes back to the lobby.${handover}`
+      : `You'll leave this round and can't rejoin until it's over.${myRole() === 'hider' ? ' Leaving counts as being out.' : ''}${handover}`;
+  confirmSheet('Leave this game?', body, 'Leave', () => leaveGame(false));
+}
+
+function menuSheet() {
+  const ph = phase();
+  openSheet(`<h2>Menu</h2><div class="pick">
+    <button class="btn btn-quiet" data-action="roster">Players</button>
+    <button class="btn btn-quiet" data-action="profile">Your name and colour</button>
+    <button class="btn btn-quiet" data-action="help">How to play</button>
+    ${isHost() && (ph === 'hiding' || ph === 'hunt') ? '<button class="btn btn-quiet" data-action="end-now">End the game for everyone</button>' : ''}
+    <button class="btn btn-danger" data-action="leave">Leave game</button>
+    <button class="btn btn-quiet" data-action="close-sheet">Close</button>
+  </div>`);
+}
+
+function playerRow(u, extra) {
+  const p = S.players[u];
+  const tags = [u === S.uid ? 'you' : '', present(u) || u === S.uid ? '' : 'offline'].filter(Boolean).join(', ');
+  return `<li class="player"><span class="player-dot${present(u) || u === S.uid ? '' : ' away'}" style="background:${esc(p.color)}">${initial(p.name)}</span>
+    <span class="player-name">${u === S.meta.host ? '<span class="crown" aria-label="Organiser">👑</span>' : ''}${esc(p.name)} <small>${esc(tags)}</small></span>${extra || ''}</li>`;
+}
+
+function rosterSheet() {
+  const ph = phase();
+  const ids = Object.keys(S.players).sort(byJoin);
+  const status = (u) => {
+    const c = S.caught[u];
+    if (S.players[u].role === 'seeker') return '<span class="tag seeker">Seeker</span>';
+    if (c) return `<span class="tag caught">Caught ${ph === 'lobby' ? '' : fmtClock(c.t - huntStart())}</span>`;
+    return '<span class="tag hider">Hiding</span>';
+  };
+  openSheet(`<h2>Players</h2><ul class="players">${ids.map((u) => playerRow(u, status(u))).join('')}</ul>
+    <div class="pick"><button class="btn btn-quiet" data-action="close-sheet">Close</button></div>`);
+}
+
+function playerSheet(u) {
+  const p = S.players[u];
+  if (!p || !isHost()) return;
+  const other = p.role === 'seeker' ? 'hider' : 'seeker';
+  openSheet(`<h2>${esc(p.name)}</h2><p>${present(u) ? 'Online now.' : 'Their phone hasn\'t been in touch for a while.'}</p><div class="pick">
+    <button class="btn btn-quiet" data-action="set-role" data-uid="${esc(u)}" data-v="${other}">Make ${other}</button>
+    ${u !== S.uid ? `<button class="btn btn-quiet" data-action="make-host" data-uid="${esc(u)}">Make organiser</button>
+    <button class="btn btn-danger" data-action="kick" data-uid="${esc(u)}">Remove from game</button>` : ''}
+    <button class="btn btn-quiet" data-action="close-sheet">Close</button></div>`);
+}
+
+function helpSheet() {
+  const st = settings();
+  openSheet(`<h2>How to play</h2>
+    <div class="help">
+      <p><b>Hiders</b> get a ${st.hideSecs / 60}-minute head start, then the hunt lasts ${st.gameMins} minutes. Stay inside the dashed circle.</p>
+      <p><b>Seekers</b> wait until the head start ends, then hunt. To catch someone, tag them, tap <b>Catch</b> and pick their name. It only counts if your phones are within ${st.tagRadius} m by GPS.</p>
+      <p><b>Caught hiders</b> join the seekers. Seekers win if they catch everyone; hiders win if anyone is still free when time runs out.</p>
+      <p><b>Reveals</b> (every ${st.revealCooldownSecs / 60} min) show seekers a ${st.revealRadius} m circle that each hider is somewhere inside.</p>
+      <p><b>You're exposed</b>, meaning seekers see exactly where you are, if you leave the play area, your phone misses a reveal, or the game is closed or your screen is locked for ${st.darkSecs} s. Keep the game open.</p>
+      ${st.powerups ? '<p><b>Power-ups</b>: walk to a purple diamond to pick one up, then tap it in your bar to use it.</p>' : ''}
+    </div>
+    <div class="pick"><button class="btn btn-quiet" data-action="close-sheet">Got it</button></div>`);
 }
 
 function shuffleSeekers() {
@@ -585,7 +765,7 @@ async function startGame() {
   if (!area()) return toast('Set the play area first.', 'warn');
   if (!seekers.length) return toast('Pick at least one seeker.', 'warn');
   if (seekers.length === Object.keys(S.players).length) return toast('Someone has to hide.', 'warn');
-  const upd = { 'meta/status': 'live', 'meta/startAt': S.db.TS };
+  const upd = { 'meta/status': 'live', 'meta/startAt': S.db.TS, 'meta/endedAt': null };
   Object.assign(upd, makeDrops(settings().powerups));
   try { await S.db.update(`games/${S.code}`, upd); }
   catch (e) { toast('Couldn\'t start the game.', 'bad'); }
@@ -594,7 +774,7 @@ async function startGame() {
 async function backToLobby() {
   try {
     if (S.meta.status === 'live') await S.db.update(path('meta'), { status: 'ended', endedAt: S.db.TS });
-    await S.db.update(`games/${S.code}`, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' });
+    await S.db.update(`games/${S.code}`, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby', 'meta/endedAt': null });
   }
   catch (e) { toast('Couldn\'t reset the game.', 'bad'); }
 }
@@ -776,12 +956,13 @@ function setMapStyle(v) {
 /* ------------------------------------------------------------------ sheets, toasts, overlays */
 
 function openSheet(html) {
+  document.body.classList.add('sheet-open');
   $('#sheet').innerHTML = html;
   $('#sheet').hidden = false;
   $('#sheet-scrim').hidden = false;
   $('#sheet-scrim').onclick = closeSheet;
 }
-function closeSheet() { $('#sheet').hidden = true; $('#sheet-scrim').hidden = true; }
+function closeSheet() { $('#sheet').hidden = true; $('#sheet-scrim').hidden = true; document.body.classList.remove('sheet-open'); }
 function confirmSheet(title, body, okLabel, fn) {
   openSheet(`<h2>${esc(title)}</h2><p>${esc(body)}</p><div class="pick"><button class="btn btn-primary" id="sheet-ok">${esc(okLabel)}</button><button class="btn btn-quiet" data-action="close-sheet">Cancel</button></div>`);
   $('#sheet-ok').onclick = () => { closeSheet(); fn(); };
@@ -804,13 +985,14 @@ function toast(text, kind, ms) {
   setTimeout(() => el.remove(), ms || 3800);
 }
 let holdTimer = null;
-function showHold(html, ms) {
+function showHold(html, ms, tone) {
   const el = $('#hold');
   el.dataset.kind = 'event';
+  el.dataset.tone = tone || '';
   el.innerHTML = `<div>${html}</div>`;
   el.hidden = false;
   clearTimeout(holdTimer);
-  holdTimer = setTimeout(() => { el.hidden = true; el.dataset.kind = ''; scheduleRender(); }, ms);
+  holdTimer = setTimeout(() => { el.hidden = true; el.dataset.kind = ''; el.dataset.tone = ''; scheduleRender(); }, ms);
 }
 
 /* ------------------------------------------------------------------ maps */
@@ -922,16 +1104,15 @@ function renderLobby() {
   const me = S.players[S.uid] || {};
   setHTML($('#profile-btn'), `<span class="player-dot" style="background:${esc(me.color)}">${initial(me.name)}</span><span>${esc(me.name || 'You')}</span>`);
   $('#team-counts').textContent = `${seekers} seeker${seekers === 1 ? '' : 's'}, ${ids.length - seekers} hider${ids.length - seekers === 1 ? '' : 's'}`;
-  $('#team-hint').textContent = host ? 'Tap a team to switch it.' : 'The organiser picks the teams.';
+  $('#team-hint').textContent = host ? 'Tap a team to switch it, or ⋯ for more.' : 'The organiser picks the teams.';
   const now = S.db.now();
   setHTML($('#player-list'), ids.map((u) => {
     const p = S.players[u];
     const loc = u === S.uid ? (S.fix && { t: now }) : S.locs[u];
-    const gps = loc && now - loc.t < 15000 ? 'GPS ok' : 'no GPS yet';
-    const tags = [u === S.uid ? 'you' : '', u === S.meta.host ? 'organiser' : '', gps].filter(Boolean).join(', ');
-    return `<li class="player"><span class="player-dot" style="background:${esc(p.color)}">${initial(p.name)}</span>
-      <span class="player-name">${esc(p.name)} <small>${tags}</small></span>
-      <button class="role-chip ${p.role}" data-action="toggle-role" data-uid="${esc(u)}" ${host ? '' : 'tabindex="-1"'}>${p.role === 'seeker' ? 'Seeker' : 'Hider'}</button></li>`;
+    const noGps = !(loc && now - loc.t < 15000);
+    const chip = `<button class="role-chip ${p.role}" data-action="toggle-role" data-uid="${esc(u)}" ${host ? '' : 'tabindex="-1"'}>${p.role === 'seeker' ? 'Seeker' : 'Hider'}</button>`;
+    const more = host ? `<button class="more-btn" data-action="player-menu" data-uid="${esc(u)}" aria-label="More options for ${esc(p.name)}">⋯</button>` : '';
+    return playerRow(u, (noGps && (present(u) || u === S.uid) ? '<span class="tag warn">No GPS</span>' : '') + chip + more);
   }).join(''));
 
   const a = area();
@@ -940,7 +1121,9 @@ function renderLobby() {
   setHTML($('#area-radius'), `<div class="setting"><div class="setting-label">Size</div>${seg('area-radius', null, AREA_RADII, a ? a.r : null, (v) => (v >= 1000 ? v / 1000 + ' km' : v + ' m'), true)}</div>`);
 
   const st = settings();
-  setHTML($('#settings'), SETTING_DEFS.map((d) => `<div class="setting"><div class="setting-label"><span>${d.label}</span>${d.note ? `<span class="muted">${d.note}</span>` : ''}</div>${seg('setting', d.k, d.opts, st[d.k], d.fmt, host)}</div>`).join(''));
+  setHTML($('#settings'), host
+    ? SETTING_DEFS.map((d) => `<div class="setting"><div class="setting-label"><span>${d.label}</span>${d.note ? `<span class="muted">${d.note}</span>` : ''}</div>${seg('setting', d.k, d.opts, st[d.k], d.fmt, true)}</div>`).join('')
+    : `<dl class="rules-summary">${SETTING_DEFS.map((d) => `<div><dt>${d.label}</dt><dd>${d.fmt(st[d.k])}</dd></div>`).join('')}</dl>`);
 
   setHTML($('#gps-status'), S.gpsErr && S.gpsErr.code === 1 ? `${esc(gpsLine())}. <button class="btn-link" data-action="gps-help">How to fix</button>` : esc(gpsLine()));
   const hiders = ids.length - seekers;
@@ -977,6 +1160,7 @@ function renderGame(ph) {
   $('#clock').className = 'clock team-' + role;
   $('#clock-time').textContent = fmtClock((ph === 'hiding' ? huntStart() : huntEnd()) - now);
   $('#clock-phase').textContent = ph === 'hiding' ? 'Head start' : 'Hunt';
+  $('#clock-sub').dataset.action = 'roster';
   $('#clock-sub').textContent = ph === 'hiding'
     ? (role === 'seeker' ? 'Stay put. Hiders can see you.' : 'Get hidden. Seekers are waiting.')
     : `${left.length} of ${hs.length} hider${hs.length === 1 ? '' : 's'} left`;
@@ -1032,7 +1216,6 @@ function renderGame(ph) {
   } else {
     actions = `<button class="btn btn-quiet" disabled>Hunt starts in ${fmtClock(huntStart() - now)}</button>`;
   }
-  if (isHost()) actions += `<button class="btn btn-quiet" data-action="end-now" style="flex:0 0 auto">End</button>`;
   setHTML($('#dock-actions'), actions);
 
   // map
@@ -1079,23 +1262,43 @@ function renderGame(ph) {
 function renderEnd() {
   const hs = startingHiders(), left = activeHiders();
   const hidersWin = left.length > 0;
+  const t0 = huntStart();
+  const catches = Object.entries(S.caught).sort((a, b) => a[1].t - b[1].t);
+  const lastCatch = catches.length ? catches[catches.length - 1][1].t : null;
+  const finish = hidersWin ? (S.meta.endedAt && S.meta.endedAt < huntEnd() ? S.meta.endedAt : huntEnd()) : (lastCatch || S.meta.endedAt || huntEnd());
   const head = $('#end-head');
   head.className = 'end-head ' + (hidersWin ? 'hider' : 'seeker');
   setHTML(head, hidersWin
     ? `<h1>Hiders win</h1><p>${esc(left.map(name).join(', '))} ${left.length === 1 ? 'was' : 'were'} never caught.</p>`
-    : `<h1>Seekers win</h1><p>All ${hs.length} hider${hs.length === 1 ? '' : 's'} caught${S.meta.endedAt && S.meta.startAt ? ` in ${fmtClock(S.meta.endedAt - huntStart())}` : ''}.</p>`);
+    : `<h1>Seekers win</h1><p>${hs.length ? `All ${hs.length} hider${hs.length === 1 ? '' : 's'} caught in ${fmtClock(finish - t0)}.` : 'Nobody was left hiding.'}</p>`);
 
-  const t0 = huntStart();
+  // Scoreboard: catches for seekers, survival time for hiders.
+  const score = {};
+  for (const [, c] of catches) if (c.how !== 'self') score[c.by] = (score[c.by] || 0) + 1;
+  const top = Math.max(0, ...Object.values(score));
+  const ids = Object.keys(S.players).sort((a, b) => (score[b] || 0) - (score[a] || 0) || byJoin(a, b));
+  setHTML($('#end-board'), ids.map((u) => {
+    const c = S.caught[u];
+    const n = score[u] || 0;
+    let line;
+    if (S.players[u].role === 'hider' && !c) line = `<span class="tag hider">Never caught</span>`;
+    else if (c) line = `<span class="tag caught">Lasted ${fmtClock(c.t - t0)}</span>`;
+    else line = `<span class="tag seeker">Seeker</span>`;
+    const caughtN = n ? `<span class="tag">${n} catch${n === 1 ? '' : 'es'}${n === top && top > 0 ? ' 🏆' : ''}</span>` : '';
+    return playerRow(u, caughtN + line);
+  }).join(''));
+
   const rows = [`<li><time>0:00</time><span>The hunt started</span></li>`];
-  Object.entries(S.caught).sort((a, b) => a[1].t - b[1].t).forEach(([h, c]) => {
+  catches.forEach(([h, c]) => {
     const how = c.how === 'host' ? ' (organiser override)' : c.how === 'self' ? ' (owned up)' : '';
     const who = c.how === 'self' ? `${esc(name(h))} was caught${how}` : `${esc(name(c.by))} caught ${esc(name(h))}${how}`;
     rows.push(`<li><time>${fmtClock(c.t - t0)}</time><span>${who}</span></li>`);
   });
   if (S.reveal) rows.push(`<li><time>&nbsp;</time><span>Seekers used ${S.reveal.n} reveal${S.reveal.n === 1 ? '' : 's'}</span></li>`);
   if (hidersWin && S.meta.endedAt && S.meta.endedAt < huntEnd() - 2000) rows.push(`<li><time>${fmtClock(S.meta.endedAt - t0)}</time><span>The organiser ended the game early</span></li>`);
-  else rows.push(`<li><time>${fmtClock((S.meta.endedAt || huntEnd()) - t0)}</time><span>${hidersWin ? 'Time ran out' : 'Last hider caught'}</span></li>`);
+  else if (hidersWin) rows.push(`<li><time>${fmtClock(huntEnd() - t0)}</time><span>Time ran out</span></li>`);
   setHTML($('#end-log'), rows.join(''));
+  $('#end-host').textContent = name(S.meta.host);
 
   const map = getMap('end', '#end-map');
   map.begin();

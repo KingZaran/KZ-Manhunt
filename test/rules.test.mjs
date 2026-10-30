@@ -246,6 +246,30 @@ await t('host override works (logged as host)', () => ok(op(A, 'set', G + '/caug
 await t('host can undo a catch', () => ok(op(A, 'set', G + '/caught/' + D, null)));
 await t('non-host cannot undo a catch', () => denied(op(B, 'set', G + '/caught/' + C, null)));
 
+console.log('organiser handover');
+const seen = (u) => op(u, 'set', G + '/seen/' + u, TS);
+await t('players can only mark themselves as present', async () => {
+  await ok(seen(A)); await ok(seen(B)); await ok(seen(C));
+  await denied(op(B, 'set', G + '/seen/' + A, TS));
+  await denied(op(X, 'set', G + '/seen/' + X, TS));
+});
+await t('cannot take over while the organiser is around', () => denied(op(B, 'set', G + '/meta/host', B)));
+await t('cannot hand the organiser role to an outsider', () => denied(op(A, 'set', G + '/meta/host', X)));
+await t('non-organiser cannot give the role away', () => denied(op(B, 'set', G + '/meta/host', C)));
+await t('organiser can hand over to another player', async () => {
+  await ok(op(A, 'set', G + '/meta/host', B));
+  await denied(op(A, 'set', G + '/meta/host', A), 'old organiser cannot grab it back');
+});
+await t('if the organiser goes quiet for 45 s, a present player can take over', async () => {
+  await advance(46000); await refresh();
+  await ok(seen(C));
+  await denied(op(D, 'set', G + '/meta/host', D), 'D has never been seen');
+  await ok(op(C, 'set', G + '/meta/host', C));
+  await denied(op(A, 'set', G + '/meta/host', A), 'C is present now');
+});
+await t('the new organiser can hand it back', () => ok(op(C, 'set', G + '/meta/host', A)));
+await t('nobody can remove someone else mid-game', () => denied(op(B, 'set', G + '/players/' + D, null)));
+
 console.log('end');
 await t('no catches after time runs out', async () => {
   await advance(31 * 60000);
@@ -254,9 +278,21 @@ await t('no catches after time runs out', async () => {
   await denied(op(A, 'set', G + '/caught/' + D, { by: A, t: TS, how: 'host' }));
 });
 await t('everyone can see everyone after the game', () => ok(op(A, 'get', G + '/locs/' + D)));
-await t('non-host cannot reset', () => denied(op(B, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
-await t('host resets to lobby', () => ok(op(A, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
+await t('organiser leaves on the results screen, handing over to Bob', async () => {
+  await ok(seen(B));
+  await ok(op(A, 'update', G, { 'meta/host': B, [`players/${A}`]: null, [`locs/${A}`]: null, [`seen/${A}`]: null }));
+  await denied(op(A, 'set', G + '/players/' + A, player('Ann')), 'cannot rejoin until the lobby');
+});
+await t('old organiser can no longer reset the game', () => denied(op(A, 'update', G, { caught: null, 'meta/status': 'lobby' })));
+await t('a player who leaves without handing over is replaced', async () => {
+  await ok(op(B, 'update', G, { [`players/${B}`]: null, [`seen/${B}`]: null }));
+  await ok(seen(C));
+  await ok(op(C, 'set', G + '/meta/host', C));
+});
+await t('non-host cannot reset', () => denied(op(D, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
+await t('new organiser takes everyone back to the lobby', () => ok(op(C, 'update', G, { caught: null, circles: null, reveal: null, drops: null, fx: null, freeze: null, 'meta/status': 'lobby' })));
 
+await t('people who left can rejoin in the lobby', () => ok(op(A, 'set', G + '/players/' + A, player('Ann'))));
 srv.kill();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
