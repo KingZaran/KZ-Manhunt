@@ -7,10 +7,10 @@ import {
   getMap, pinHTML, drawArea, drawMe, distLabel, gpsLine, playerRow, wake,
   isDenied, distM, MAX_ACC, POWER_MS, sound,
   REVEAL_STYLE, OLD_REVEAL_STYLE, MISSION_STYLE, MISSION_HELD_STYLE, BURN_STYLE, FREEZE_STYLE, SCAN_STYLE, POLL_EVERY,
-} from './core.js?v=mvvfeq0n';
-import { POWERS, kindsFor, REVEAL_ANSWER_MS, FLARE_DELAY_MS, FLARE_SHOW_MS, MISSION_FAIL_MS, DECOY_M, SILENCE_TOLERANCE_M } from './rules-config.js?v=mvvfeq0n';
-import { randomPointNear, mPerDegLon, iosWakeLockBroken } from './geo.js?v=mvvfeq0n';
-import { seeded } from './movement.js?v=mvvfeq0n';
+} from './core.js?v=mvwv1q6e';
+import { POWERS, kindsFor, REVEAL_ANSWER_MS, FLARE_DELAY_MS, FLARE_SHOW_MS, MISSION_FAIL_MS, DECOY_M, SILENCE_TOLERANCE_M } from './rules-config.js?v=mvwv1q6e';
+import { randomPointNear, mPerDegLon, iosWakeLockBroken } from './geo.js?v=mvwv1q6e';
+import { seeded } from './movement.js?v=mvwv1q6e';
 
 const { cue, say, play, buzz } = sound;
 const side = (role) => (role === 'hider' ? 'h' : 's');
@@ -855,7 +855,32 @@ function cdButton(action, label, readyAt, t, cls) {
   return `<button class="btn ${cls}" data-action="${action}" ${ready ? '' : 'disabled'}><span>${label}</span>${ready ? '' : `<small>${fmtClock(readyAt - t)}</small>`}</button>`;
 }
 
+// The bottom panel can be swiped down (or closed with ×) to see more of the map.
+function renderMini(ph, role, t, s) {
+  const me = S.players[S.uid] || {};
+  const bits = [];
+  if (ph === 'hunt' && role === 'hider' && s.staminaSecs > 0 && S.move.stamina != null) {
+    const st = S.move.stamina;
+    bits.push(`<span class="${st <= s.breathSecs / 2 ? 'mini-low' : ''}">🏃 ${st <= 0 ? 'Walk!' : Math.ceil(st) + ' s'}</span>`);
+  }
+  if (ph === 'hunt' && role === 'seeker') {
+    const rv = nextRevealAt(), fr = nextFreezeAt();
+    bits.push(`<span>📡 ${t >= rv ? '<b>Ready</b>' : fmtClock(rv - t)}</span>`, `<span>❄️ ${t >= fr ? '<b>Ready</b>' : fmtClock(fr - t)}</span>`);
+  }
+  if (ph === 'hiding') bits.push(`<span>Hunt in ${fmtClock(huntStart() - t)}</span>`);
+  const n = ph === 'hunt' ? bagItems().filter((x) => !x.armed && x.usable).reduce((a, g) => a + g.ids.length, 0) : 0;
+  if (n) bits.push(`<span>⚡ ${n} power-up${n === 1 ? '' : 's'}</span>`);
+  const mi = S.mission, mine = S.mhold[S.uid];
+  if (ph === 'hunt' && role === 'hider' && mi && !mi.done && !mi.fail && mine && mine.w === mi.id) bits.push(`<span>🎯 ${fmtClock(s.missionHold * 1000 - (t - mine.since))}</span>`);
+  const catchBtn = ph === 'hunt' && role === 'seeker' ? '<button class="btn btn-primary mini-catch" data-action="catch-menu">Catch</button>' : '';
+  setHTML($('#dock-mini'), `<button class="mini-open" data-action="dock-toggle" aria-label="Show the controls"><span class="player-dot" style="background:${esc(me.color)}">${initial(me.name)}</span><span class="mini-bits">${bits.join('') || `<span>${role === 'seeker' ? 'Hunter' : 'Hider'}</span>`}</span><span class="mini-chev" aria-hidden="true">▲</span></button>${catchBtn}`);
+}
+
 function renderDock(ph, role, t, s) {
+  const dock = $('#dock');
+  dock.classList.toggle('min', !!S.dockMin);
+  $('#dock-mini').hidden = !S.dockMin;
+  if (S.dockMin) { renderMini(ph, role, t, s); return; }
   let edge = '';
   const a = area();
   if (a && S.fix) {

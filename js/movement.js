@@ -2,7 +2,7 @@
 // running speed, footprints, stamina, camping spots, the play-area boundary, and holding still
 // while frozen. Pure logic, no DOM: the app feeds in GPS fixes and the clock and reads the state.
 
-import { distM } from './geo.js?v=mvvfeq0n';
+import { distM } from './geo.js?v=mvwv1q6e';
 
 export class Movement {
   constructor() { this.reset(); }

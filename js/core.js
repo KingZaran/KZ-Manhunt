@@ -1,10 +1,10 @@
 // Shared state, helpers and UI building blocks.
-import { isDenied } from './fb.js?v=mvvfeq0n';
-import { GameMap, MAP_STYLES } from './map.js?v=mvvfeq0n';
-import { distM, mPerDegLon, WakeLock, GpsFilter } from './geo.js?v=mvvfeq0n';
-import { DEFAULTS, POWER_MS, MAX_ACC, PRESENT_MS, HOST_GONE_MS } from './rules-config.js?v=mvvfeq0n';
-import { Movement, FreezeState } from './movement.js?v=mvvfeq0n';
-import * as sound from './sound.js?v=mvvfeq0n';
+import { isDenied } from './fb.js?v=mvwv1q6e';
+import { GameMap, MAP_STYLES } from './map.js?v=mvwv1q6e';
+import { distM, mPerDegLon, WakeLock, GpsFilter } from './geo.js?v=mvwv1q6e';
+import { DEFAULTS, POWER_MS, MAX_ACC, PRESENT_MS, HOST_GONE_MS } from './rules-config.js?v=mvwv1q6e';
+import { Movement, FreezeState } from './movement.js?v=mvwv1q6e';
+import * as sound from './sound.js?v=mvwv1q6e';
 
 export { isDenied, distM, mPerDegLon, DEFAULTS, POWER_MS, MAX_ACC, sound, MAP_STYLES };
 
@@ -113,6 +113,7 @@ export const S = {
   lastSent: 0, lastPoll: 0, lastSeenSent: 0, lastHost: null,
   maps: {}, tick: null, renderQueued: false, threeD: false, follow: false, engine: 'leaflet',
   mapStyle: load('mapStyle') || 'light',
+  dockMin: load('dockMin') === '1',
   seenCache: {}, claiming: false, leaving: false, endSent: false,
   ev: {},      // "already announced" markers, reset each round
 };

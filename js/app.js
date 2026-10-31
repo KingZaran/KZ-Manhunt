@@ -1,9 +1,9 @@
 // Boot, home, lobby, session plumbing and the results screen. The in-game rules live in play.js.
-import { connect, isConfigured } from './fb.js?v=mvvfeq0n';
-import { loadEngine } from './map.js?v=mvvfeq0n';
+import { connect, isConfigured } from './fb.js?v=mvwv1q6e';
+import { loadEngine } from './map.js?v=mvwv1q6e';
 import qrcode from '../vendor/qrcode/qrcode.js';
-import { watchLocation, nudgeLocation } from './geo.js?v=mvvfeq0n';
-import { POWERS } from './rules-config.js?v=mvvfeq0n';
+import { watchLocation, nudgeLocation } from './geo.js?v=mvwv1q6e';
+import { POWERS } from './rules-config.js?v=mvwv1q6e';
 import {
   S, $, esc, initial, r6, setHTML, fmtClock, store, load, once,
   COLOURS, CODE_CHARS, AREA_RADII, SETTING_GROUPS, HEARTBEAT, SEEN_EVERY, DEFAULTS,
@@ -12,11 +12,11 @@ import {
   openSheet, closeSheet, confirmSheet, toast, showHold, scheduleRender,
   getMap, pinHTML, fitOnce, drawArea, drawMe, recentre, toggle3D, mapStyleSheet, setMapStyle, gpsLine, playerRow,
   isDenied, mPerDegLon, sound,
-} from './core.js?v=mvvfeq0n';
+} from './core.js?v=mvwv1q6e';
 import {
   subscribeGame, stopGame, resetRound, onFix, tickGame, renderGame, canListen, openingCaches,
   triggerReveal, freezeSheet, catchMenu, tryCatch, powerSheet,
-} from './play.js?v=mvvfeq0n';
+} from './play.js?v=mvwv1q6e';
 
 const { cue, play, say } = sound;
 hooks.render = render;
@@ -42,6 +42,7 @@ async function boot() {
   setupHome();
   document.addEventListener('click', onClick);
   document.addEventListener('visibilitychange', onVisibility);
+  setupDockSwipe();
   $('#boot').hidden = true;
 
   const saved = load('game');
@@ -412,8 +413,42 @@ async function onClick(e) {
     case 'again': return backToLobby();
     case 'close-sheet': return closeSheet();
     case 'wake': return wake.enable();
+    case 'dock-toggle': return setDockMin(!S.dockMin);
     default: return undefined;
   }
+}
+
+// Minimise the bottom panel with × or by swiping it down; tap or swipe up to bring it back.
+function setDockMin(on) {
+  if (!!S.dockMin === on) return;
+  S.dockMin = on;
+  store('dockMin', on ? '1' : null);
+  render();
+  setTimeout(() => { if (S.maps.game) S.maps.game.resize(); }, 60);
+}
+function setupDockSwipe() {
+  const dock = $('#dock');
+  let y0 = null, x0 = 0, dy = 0, vertical = null;
+  dock.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; dy = 0; vertical = null;
+  }, { passive: true });
+  dock.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    const ddx = e.touches[0].clientX - x0;
+    dy = e.touches[0].clientY - y0;
+    if (vertical == null && (Math.abs(dy) > 8 || Math.abs(ddx) > 8)) vertical = Math.abs(dy) > Math.abs(ddx);
+    if (vertical && !S.dockMin && dy > 0) { dock.style.transition = 'none'; dock.style.transform = `translateY(${dy * 0.7}px)`; }
+  }, { passive: true });
+  const end = () => {
+    if (y0 == null) return;
+    dock.style.transition = ''; dock.style.transform = '';
+    if (vertical && !S.dockMin && dy > 45) setDockMin(true);
+    else if (vertical && S.dockMin && dy < -25) setDockMin(false);
+    y0 = null;
+  };
+  dock.addEventListener('touchend', end);
+  dock.addEventListener('touchcancel', end);
 }
 
 const inviteUrl = () => `${location.origin}${location.pathname}?code=${S.code}`;

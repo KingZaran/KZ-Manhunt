@@ -17,6 +17,15 @@ mkdirSync(SHOTS, { recursive: true });
 const srv = spawn(process.execPath, [HERE + 'mock-server.mjs', String(PORT)], { stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise((r) => srv.stdout.once('data', r));
 const advance = (ms) => fetch(BASE + '/__test/advance', { method: 'POST', body: JSON.stringify({ ms }) });
+// Jump the clock in steps short enough that nobody looks gone (which would hand over the organiser role).
+const pages = [];
+async function jump(ms) {
+  for (let left = ms; left > 0; left -= 30000) {
+    await advance(Math.min(30000, left));
+    await Promise.all(pages.filter((p) => !p.isClosed()).map((p) => p.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))).catch(() => {})));
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
 
 const LAT = 51.1, LNG = -1.65;
 const mlon = 111320 * Math.cos(LAT * Math.PI / 180);
@@ -43,6 +52,7 @@ async function phone(label, pos, url = '/index.html') {
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(`${label} console: ${m.text()}`); });
   page.label = label;
+  pages.push(page);
   page.ctx = ctx;
   await page.goto(BASE + url);
   return page;
@@ -154,7 +164,7 @@ try {
   await shot(bob, '05-hider-headstart');
 
   console.log('hunt');
-  await advance(61000);
+  await jump(61000);
   check(await waitFor(async () => (await text(ann, '#clock-phase')) === 'Hunting'), 'hunt starts');
   check(await waitFor(async () => (await bob.locator('#game-map .pin.seeker').count()) === 0), 'hider loses sight of the hunter');
   check((await ann.locator('#game-map .pin.hider').count()) === 0, 'hunter cannot see hiders');
@@ -185,6 +195,25 @@ try {
   check(await waitFor(async () => (await cat.locator('#game-map .pin.seeker').count()) >= 1, 8000), 'Lookout shows Cat the hunter');
   check(await waitFor(async () => (await cat.locator('#dock-powers').innerText()).includes('Lookout')), 'Lookout timer shows');
   await shot(cat, '13-lookout');
+
+  console.log('minimise the bottom panel');
+  await cat.click('.dock-x');
+  check(await waitFor(async () => !(await cat.locator('#dock-mini').isHidden()) && await cat.locator('#dock-actions').isHidden()), 'the × minimises the panel');
+  check((await text(cat, '#dock-mini')).includes('power-up') || (await text(cat, '#dock-mini')).includes('🏃'), 'the mini bar still shows stamina and power-ups');
+  await shot(cat, '13b-minimised');
+  await cat.click('.mini-open');
+  check(await waitFor(async () => !(await cat.locator('#dock-actions').isHidden())), 'tapping the mini bar brings it back');
+  const swipe = (p, from, to) => p.evaluate(([a, b]) => {
+    const el = document.querySelector('#dock');
+    const tp = (y) => new Touch({ identifier: 1, target: el, clientX: 200, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [tp(a)], bubbles: true }));
+    for (let i = 1; i <= 5; i++) el.dispatchEvent(new TouchEvent('touchmove', { touches: [tp(a + (b - a) * i / 5)], bubbles: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true }));
+  }, [from, to]);
+  await swipe(cat, 650, 760);
+  check(await waitFor(async () => !(await cat.locator('#dock-mini').isHidden())), 'swiping down minimises it');
+  await swipe(cat, 800, 740);
+  check(await waitFor(async () => !(await cat.locator('#dock-actions').isHidden())), 'swiping up brings it back');
   await cat.click('.menu-btn');
   check((await text(cat, '#sheet')).includes('Leave game'), 'in-game menu has Leave');
   await sleep(300); await shot(cat, '14-menu');
@@ -202,7 +231,7 @@ try {
 
   console.log('reveal');
   await cat.context().setGeolocation(at(260, 0));
-  await advance(120000);
+  await jump(120000);
   await sleep(4500);
   check(await waitFor(async () => !(await ann.locator('[data-action="reveal"]').isDisabled())), 'reveal ready after cooldown');
   check(await waitFor(async () => !(await ann.locator('[data-action="freeze"]').isDisabled())), 'freeze ready after cooldown');
@@ -220,11 +249,11 @@ try {
   check(await waitFor(async () => (await text(bob, '#hold')).includes('YOU WILL BE FROZEN'), 10000), 'Bob (41 m away) must find cover');
   await shot(bob, '16-freeze-cover');
   check(await cat.locator('#hold').isHidden(), 'Cat (260 m away) is out of range');
-  await advance(21000);
+  await jump(21000);
   check(await waitFor(async () => (await text(bob, '#hold')).includes('HOLD STILL'), 8000), 'then Bob must hold still');
   await shot(bob, '17-freeze-hold');
   check(await waitFor(async () => (await toasts(ann)).length >= 0 && (await ann.evaluate(() => Object.keys(window.__mh.S.fz).length)) === 1), 'one hider was hit');
-  await advance(61000);
+  await jump(61000);
   check(await waitFor(async () => await bob.locator('#hold').isHidden(), 8000), 'Bob is released after the hold');
   await sleep(4500);
 
@@ -245,7 +274,7 @@ try {
   check(await waitFor(async () => (await cat.locator('#banner').innerText()).includes('play area')), 'Cat is warned she is out of bounds');
   await shot(cat, '11b-out');
   await sleep(3000);
-  await advance(62000);
+  await jump(62000);
   check(await waitFor(async () => (await ann.locator('#game-map .pin.exposed').allInnerTexts()).some((t) => t.includes('outside')), 10000), 'after the grace period, hunters see Cat');
   check(await waitFor(async () => (await text(cat, '#sheet')).includes('Was that fair?'), 8000), 'Cat is asked whether she was eliminated');
   await shot(cat, '11c-fair');
